@@ -15,8 +15,7 @@ import threading
 import time
 import shutil
 
-os.chdir('C:/Git/traffic-lights')
-
+os.chdir(os.path.dirname(os.path.realpath(__file__)))  # todo: ensure this leads to traffic-lights home directory
 
 
 def show_preds(choice=None, use_test=True):
@@ -34,6 +33,7 @@ def show_preds(choice=None, use_test=True):
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     plt.title('Prediction: {}'.format(traffic.classes[pred]))
     plt.show()
+
 
 def plot_features(layer_idx, img_idx=0, square=2):
     title_layer_idx = float(layer_idx)
@@ -64,6 +64,7 @@ def plot_features(layer_idx, img_idx=0, square=2):
     # show the figure
     ax.title.set_text('Conv2D Layer Index: {}'.format(title_layer_idx))
     # plt.show()
+
 
 def plot_filters(layer_idx=0):
     layers = [layer for layer in traffic.model.layers if 'conv' in layer.name]
@@ -97,6 +98,7 @@ class TrafficLightsModel:
         self.reduction = 2
         self.batch_size = 32
         self.classes = ['RED', 'GREEN', 'YELLOW', 'NONE']
+        self.flow_images = 10  # 10 new images from 1 original image
 
         self.model = None
         self.x_train = []
@@ -108,6 +110,8 @@ class TrafficLightsModel:
         self.img_gen_finished = 0.
 
     def do_init(self):
+        self.check_data()
+
         if len(os.listdir('data/flowed')) < len(self.classes) or len(os.listdir('data/flowed/{}'.format(self.classes[0]))) == 0 or self.reset_flowed:
             self.reset_data()
             self.image_generator()
@@ -184,7 +188,7 @@ class TrafficLightsModel:
             time.sleep(0.1)
             os.makedirs('data/flowed/{}'.format(photo_class))
 
-    def image_generator(self, num_images=10):
+    def image_generator(self):
         datagen = ImageDataGenerator(
                 rotation_range=2,
                 width_shift_range=0,
@@ -194,12 +198,12 @@ class TrafficLightsModel:
                 horizontal_flip=True,
                 fill_mode='nearest')
 
-        print('Starting {} threads to randomly transform input images'.format(len(self.classes)))
+        print('Starting {} threads to randomly transform input images, please wait...'.format(len(self.classes)))
         for image_class in self.classes:
             photos = os.listdir('data/{}'.format(image_class))
-            threading.Thread(target=self.generate_images, args=(image_class, photos, datagen, num_images)).start()
+            threading.Thread(target=self.generate_images, args=(image_class, photos, datagen)).start()
 
-    def generate_images(self, image_class, images, datagen, num_images):
+    def generate_images(self, image_class, images, datagen):
         t = time.time()
         for idx, photo in enumerate(images):
             if time.time() - t > 10:
@@ -211,10 +215,13 @@ class TrafficLightsModel:
             x = x.reshape((1,) + x.shape)  # this is a Numpy array with shape (1, 3, 150, 150)
 
             for i, batch in enumerate(datagen.flow(x, batch_size=1, save_to_dir='data/flowed/{}'.format(image_class), save_prefix=image_class, save_format='png')):
-                if i == num_images:
+                if i == self.flow_images:
                     break
         self.img_gen_finished += 1
-        print('{}: Finished!'.format(image_class))
+        if self.img_gen_finished != 4:
+            print('{}: Finished!'.format(image_class))
+        else:
+            print('All finished!')
 
     def one_hot(self, idx):
         one = [0] * len(self.classes)
@@ -224,6 +231,17 @@ class TrafficLightsModel:
     def save_model(self):
         self.model.save('models/h5_models/model.h5')
 
+    def check_data(self):
+        if not os.path.exists('data'):
+            print('DATA DIRECTORY DOESN\'T EXIST!')
+            os.mkdir('data')
+            raise Exception('Please unzip the data.zip archive into data directory')
+        if not os.path.exists('data/flowed'):
+            print('CREATING FLOWED DIRECTORY')
+            os.mkdir('data/flowed')
+        data_files = os.listdir('data')
+        if not all([i in data_files for i in self.classes]):
+            raise Exception('Please unzip the data.zip archive into data directory')
 
 traffic = TrafficLightsModel(force_reset=False)
 traffic.do_init()
