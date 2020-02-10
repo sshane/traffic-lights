@@ -99,6 +99,7 @@ class TrafficLightsModel:
         self.batch_size = 32
         self.classes = ['RED', 'GREEN', 'YELLOW', 'NONE']
         self.flow_images = 5  # 10 new images from 1 original image
+        self.test_percentage = 0.2  # percentage of total data to be validated on
 
         self.model = None
         self.x_train = []
@@ -174,7 +175,7 @@ class TrafficLightsModel:
                 self.x_train.append(img)
                 self.y_train.append(self.one_hot(phot_class))
 
-        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.x_train, self.y_train, test_size=0.2)
+        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.x_train, self.y_train, test_size=self.test_percentage)
         self.x_train = np.array(self.x_train)
         self.y_train = np.array(self.y_train)
         self.x_test = np.array(self.x_test)
