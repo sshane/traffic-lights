@@ -4,7 +4,9 @@ import tensorflow as tf
 import os
 from keras.models import load_model
 #from tensorflow.keras.models import load_model
-os.chdir("C:/Git/traffic-lights/models")
+
+os.chdir(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../models'))  # todo: ensure this leads to traffic-lights models directory
+
 K.clear_session()
 def freeze_session(session, keep_var_names=None, output_names=None, clear_devices=True):
     """

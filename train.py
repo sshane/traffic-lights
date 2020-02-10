@@ -243,5 +243,5 @@ class TrafficLightsModel:
         if not all([i in data_files for i in self.classes]):
             raise Exception('Please unzip the data.zip archive into data directory')
 
-traffic = TrafficLightsModel(force_reset=False)
+traffic = TrafficLightsModel(force_reset=True)  # todo: set force_reset to reset flowed data if one has been corrupted
 traffic.do_init()
