@@ -98,7 +98,7 @@ class TrafficLightsModel:
         self.reduction = 2
         self.batch_size = 32
         self.classes = ['RED', 'GREEN', 'YELLOW', 'NONE']
-        self.flow_images = 10  # 10 new images from 1 original image
+        self.flow_images = 5  # 10 new images from 1 original image
 
         self.model = None
         self.x_train = []
@@ -228,8 +228,8 @@ class TrafficLightsModel:
         one[idx] = 1
         return one
 
-    def save_model(self):
-        self.model.save('models/h5_models/model.h5')
+    def save_model(self, name):
+        self.model.save('models/h5_models/{}.h5'.format(name))
 
     def check_data(self):
         if not os.path.exists('data'):
