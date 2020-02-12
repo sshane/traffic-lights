@@ -101,15 +101,19 @@ def plot_filters(layer_idx=0):
     plt.show()
 
 
-class TrafficLightsModel:
+class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
     def __init__(self, force_reset=False):
         self.W, self.H = 1164, 874
         self.y_hood_crop = 665  # pixels from top where to crop image to get rid of hood. this is perfect for smallish vehicles
-        self.reduction = 2
-        self.batch_size = 4
         self.classes = ['RED', 'GREEN', 'YELLOW', 'NONE']
-        self.flow_images = 3  # 10 new images from 1 original image
+        self.proc_folder = 'data/processed'
+
+        self.reduction = 2
+        self.batch_size = 8
         self.test_percentage = 0.2  # percentage of total data to be validated on
+        self.num_flow_images = 3
+
+        self.limit_samples = 2000
 
         self.model = None
         self.x_train = []
@@ -117,19 +121,17 @@ class TrafficLightsModel:
         self.x_test = []
         self.y_test = []
 
-        self.reset_flowed = force_reset
-        self.img_gen_finished = 0.
+        self.reset_proc = force_reset
+        self.classes_processed = 0
 
     def do_init(self):
         self.check_data()
-
-        if len(os.listdir('data/flowed')) < len(self.classes) or len(os.listdir('data/flowed/{}'.format(self.classes[0]))) == 0 or self.reset_flowed:
+        if len(os.listdir(self.proc_folder)) < len(self.classes) or len(os.listdir('{}/{}'.format(self.proc_folder, self.classes[0]))) == 0 or self.reset_proc:
             self.reset_data()
-            # self.image_generator()
-            self.crop_images()
+            self.process_images()
             while True:
                 time.sleep(5)
-                if self.img_gen_finished == len(self.classes):
+                if self.classes_processed == len(self.classes):
                     self.load_imgs()
                     break
         else:
@@ -153,27 +155,23 @@ class TrafficLightsModel:
                        validation_data=(self.x_test, self.y_test))
 
     def get_model(self):
-        kernel_size = (3, 3)  # (3, 3)
+        kernel_size = (2, 2)  # (3, 3)
 
         model = Sequential()
-        model.add(Conv2D(16, kernel_size, activation='relu', input_shape=self.x_train.shape[1:]))
+        model.add(Conv2D(8, kernel_size, activation='relu', input_shape=self.x_train.shape[1:]))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+        # model.add(BatchNormalization())
+
+        model.add(Conv2D(16, kernel_size, activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         # model.add(BatchNormalization())
 
         model.add(Conv2D(32, kernel_size, activation='relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-        # model.add(BatchNormalization())
-
-        model.add(Conv2D(32, kernel_size, activation='relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-        # model.add(BatchNormalization())
-
-        model.add(Conv2D(64, kernel_size, activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         # model.add(BatchNormalization())
 
         model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
-        model.add(Dense(64, activation='relu'))
+        model.add(Dense(32, activation='relu'))
         # model.add(Dropout(0.3))
         model.add(Dense(32, activation='relu'))
         # model.add(Dropout(0.3))
@@ -185,18 +183,19 @@ class TrafficLightsModel:
         print('Loading data...', flush=True)
         for phot_class, phot_dir in enumerate(self.classes):
             t = 0
-            images = os.listdir('data/flowed/{}'.format(phot_dir))
+            images = os.listdir('{}/{}'.format(self.proc_folder, phot_dir))
             for idx, phot in enumerate(images):
                 if time.time() - t >= 5:
                     print('{}: Loading photo {} of {}.'.format(self.classes[phot_class], idx + 1, len(images)))
                     t = time.time()
-                img = cv2.imread('data/flowed/{}/{}'.format(phot_dir, phot))
+                img = cv2.imread('{}/{}/{}'.format(self.proc_folder, phot_dir, phot))
                 # img = cv2.resize(img, dsize=(self.W // self.reduction, self.H // self.reduction), interpolation=cv2.INTER_CUBIC)  # don't resize
-
-                img = np.asarray(img, dtype=np.float32) / 255  # normalize
-                if img.dtype == np.float32:
+                try:
+                    img = img.astype(np.float16) / 255  # normalize
                     self.x_train.append(img)
                     self.y_train.append(self.one_hot(phot_class))
+                except Exception as e:
+                    print(e)
 
         print('\nGetting train and test set, please wait...', flush=True)
         self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.x_train, self.y_train, test_size=self.test_percentage)
@@ -206,100 +205,56 @@ class TrafficLightsModel:
         self.y_test = np.array(self.y_test)
         self.train()
 
-    def load_imgs_old(self):
-        print('Loading and resizing data...', flush=True)
-        for phot_class, phot_dir in enumerate(self.classes):
-            for phot in os.listdir('data/flowed/{}'.format(phot_dir)):
-                img = cv2.imread('data/flowed/{}/{}'.format(phot_dir, phot))
-                # img = cv2.resize(img, dsize=(self.W // self.reduction, self.H // self.reduction), interpolation=cv2.INTER_CUBIC)  # don't resize
-                img = img[0:self.y_hood_crop, 0:self.W]  # full resolution but cropping out hood
+    def flow_and_crop(self, image_class, photos, datagen):
+        t = time.time()
+        for idx, photo in enumerate(photos):
+            if time.time() - t > 10:
+                print('{}: Working on photo {} of {}.'.format(image_class, idx + 1, len(photos)))
+                t = time.time()
+            base_img = cv2.imread('data/{}/{}'.format(image_class, photo))  # loads uint8 BGR array
+            imgs = np.array([base_img for _ in range(self.num_flow_images)])
 
-                img = np.asarray(img) / 255  # normalize
-                self.x_train.append(img)
-                self.y_train.append(self.one_hot(phot_class))
+            flowed_imgs = []
+            for img in datagen.flow(imgs, batch_size=1):
+                flowed_imgs.append(img[0].astype(np.uint8))  # convert from float32 0 to 255 to uint8 0 to 255
+                if len(flowed_imgs) == self.num_flow_images:
+                    break
+            flowed_imgs.append(base_img)  # append original non flowed image so we can copy original cropped as well.
+            cropped_imgs = [img[0:self.y_hood_crop, 0:self.W] for img in flowed_imgs]
+            for k, img in enumerate(cropped_imgs):
+                cv2.imwrite('{}/{}/{}.{}.png'.format(self.proc_folder, image_class, photo[:-4], k), img)
 
-        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.x_train, self.y_train, test_size=self.test_percentage)
-        self.x_train = np.array(self.x_train)
-        self.y_train = np.array(self.y_train)
-        self.x_test = np.array(self.x_test)
-        self.y_test = np.array(self.y_test)
-        self.train()
+        self.classes_processed += 1
+        if self.classes_processed != 4:
+            print('{}: Finished!'.format(image_class))
+        else:
+            print('All finished!')
 
-    def reset_data(self):
-        for photo_class in self.classes:
-            if os.path.exists('data/flowed/{}'.format(photo_class)):
-                shutil.rmtree('data/flowed/{}'.format(photo_class))
-            time.sleep(0.1)
-            os.makedirs('data/flowed/{}'.format(photo_class))
-            time.sleep(0.1)
 
-    def crop_images(self):
-        def crop_imgs(image_class, images):
-            t = time.time()
-            for idx, photo in enumerate(images):
-                if time.time() - t > 10:
-                    print('{}: Working on photo {} of {}.'.format(image_class, idx + 1, len(images)))
-                    t = time.time()
-                # copyfile('data/{}/{}'.format(image_class, photo), 'data/flowed/{}/{}'.format(image_class, photo))  # copy original photo
-                # img = load_img('data/{}/{}'.format(image_class, photo))
-                img = cv2.imread('data/{}/{}'.format(image_class, photo))
-                img = np.asarray(img, dtype=np.float32)
-
-                img = img[0:self.y_hood_crop, 0:self.W]
-
-                cv2.imwrite('data/flowed/{}/{}.png'.format(image_class, photo[:-4]), img)
-                # with open('data/flowed/{}/{}.pickle'.format(image_class, photo[:-4]), 'wb') as f:
-                #     f.write(img)
-
-            self.img_gen_finished += 1
-            if self.img_gen_finished != 4:
-                print('{}: Finished!'.format(image_class))
-            else:
-                print('All finished!')
-
-        print('Starting {} threads to randomly transform input images, please wait...'.format(len(self.classes)))
-        for image_class in self.classes:
-            photos = os.listdir('data/{}'.format(image_class))
-            threading.Thread(target=crop_imgs, args=(image_class, photos)).start()
-
-    def image_generator(self):
+    def process_images(self):
         datagen = ImageDataGenerator(
                 rotation_range=2,
                 width_shift_range=0,
                 height_shift_range=0,
                 shear_range=0,
-                zoom_range=0.05,
+                zoom_range=0.2,
                 horizontal_flip=True,
                 fill_mode='nearest')
 
-        print('Starting {} threads to randomly transform input images, please wait...'.format(len(self.classes)))
+        print('Starting {} threads to randomly transform and crop input images, please wait...'.format(len(self.classes)))
         for image_class in self.classes:
             photos = os.listdir('data/{}'.format(image_class))
-            threading.Thread(target=self.generate_images, args=(image_class, photos, datagen)).start()
+            while len(photos) > self.limit_samples:
+                del photos[random.randint(0, len(photos) - 1)]
+            threading.Thread(target=self.flow_and_crop, args=(image_class, photos, datagen)).start()
 
-    def generate_images(self, image_class, images, datagen):
-        t = time.time()
-        for idx, photo in enumerate(images):
-            if time.time() - t > 10:
-                print('{}: Working on photo {} of {}.'.format(image_class, idx + 1, len(images)))
-                t = time.time()
-            # copyfile('data/{}/{}'.format(image_class, photo), 'data/flowed/{}/{}'.format(image_class, photo))  # copy original photo
-            # img = load_img('data/{}/{}'.format(image_class, photo))
-            img = cv2.imread('data/{}/{}'.format(image_class, photo))
-            img = np.asarray(img, dtype=np.float32)
-            img = img[0:self.y_hood_crop, 0:self.W]
-
-            cv2.imwrite('data/flowed/{}'.format(image_class), img)
-            # x = x.reshape((1,) + x.shape)  # this is a Numpy array with shape (1, 3, 150, 150)
-
-            # for i, batch in enumerate(datagen.flow(x, batch_size=4, save_to_dir='data/flowed/{}'.format(image_class), save_prefix=image_class, save_format='png')):
-            #     if i == self.flow_images:
-            #         break
-        self.img_gen_finished += 1
-        if self.img_gen_finished != 4:
-            print('{}: Finished!'.format(image_class))
-        else:
-            print('All finished!')
+    def reset_data(self):
+        for photo_class in self.classes:
+            if os.path.exists('{}/{}'.format(self.proc_folder, photo_class)):
+                shutil.rmtree('{}/{}'.format(self.proc_folder, photo_class))
+            time.sleep(0.1)
+            os.makedirs('{}/{}'.format(self.proc_folder, photo_class))
+            time.sleep(0.1)
 
     def one_hot(self, idx):
         one = [0] * len(self.classes)
@@ -314,12 +269,12 @@ class TrafficLightsModel:
             print('DATA DIRECTORY DOESN\'T EXIST!')
             os.mkdir('data')
             raise Exception('Please unzip the data.zip archive into data directory')
-        if not os.path.exists('data/flowed'):
-            print('CREATING FLOWED DIRECTORY')
-            os.mkdir('data/flowed')
+        if not os.path.exists(self.proc_folder):
+            print('CREATING CROPPED DIRECTORY')
+            os.mkdir(self.proc_folder)
         data_files = os.listdir('data')
         if not all([i in data_files for i in self.classes]):
             raise Exception('Please unzip the data.zip archive into data directory')
 
-traffic = TrafficLightsModel(force_reset=False)  # todo: set force_reset to reset flowed data
+traffic = TrafficLightsModel(force_reset=False)  # todo: set force_reset to reset cropped data
 traffic.do_init()
