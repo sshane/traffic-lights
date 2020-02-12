@@ -20,8 +20,9 @@ import time
 import shutil
 import pickle
 
+
 config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.7
+config.gpu_options.per_process_gpu_memory_fraction = 0.95
 set_session(tf.Session(config=config))
 
 
@@ -33,10 +34,11 @@ def get_img_paths(typ, class_choice):
 
 
 def show_preds():
-    class_choice = random.choice(traffic.classes)
+    class_choice = random.choice(traffic.keras_classes)
     x_test = get_img_paths('validation', class_choice)
     img_choice = random.choice(x_test)
-    img = cv2.imread('{}/.validation/{}/{}'.format(traffic.proc_folder, class_choice, img_choice)) / 255.0
+    img = cv2.imread('{}/.validation/{}/{}'.format(traffic.proc_folder, class_choice, img_choice))
+    img = (img / 255).astype(np.float32)
 
     pred = traffic.model.predict(np.array([img]))[0]
     pred = np.argmax(pred)
@@ -44,7 +46,7 @@ def show_preds():
     plt.clf()
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     plt.show()
-    plt.title('Prediction: {}'.format(traffic.classes[pred]))
+    plt.title('Prediction: {}'.format(traffic.keras_classes[pred]))
     plt.show()
 
 
@@ -122,11 +124,11 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
         self.proc_folder = 'data/.processed'
 
         self.reduction = 2
-        self.batch_size = 32
+        self.batch_size = 64
         self.test_percentage = 0.2  # percentage of total data to be validated on
-        self.num_flow_images = 10
+        self.num_flow_images = 7
 
-        self.limit_samples = 600
+        self.limit_samples = 700
 
         self.model = None
         # self.x_train = []
@@ -205,7 +207,7 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
         model.add(MaxPooling2D(pool_size=(2, 2)))
         # model.add(BatchNormalization())
 
-        model.add(Conv2D(32, kernel_size, activation='relu'))
+        model.add(Conv2D(24, kernel_size, activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         # model.add(BatchNormalization())
 
@@ -296,16 +298,16 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
             if time.time() - t > 10:
                 print('{}: Working on photo {} of {}.'.format(image_class, idx + 1, len(photos)))
                 t = time.time()
+
             base_img = cv2.imread('data/{}/{}'.format(image_class, photo))  # loads uint8 BGR array
             imgs = np.array([base_img for _ in range(self.num_flow_images)])
 
-            flowed_imgs = []
-            for img in datagen.flow(imgs, batch_size=1):
-                flowed_imgs.append(img[0].astype(np.uint8))  # convert from float32 0 to 255 to uint8 0 to 255
-                if len(flowed_imgs) == self.num_flow_images:
-                    break
+            # randomly transform images
+            batch = datagen.flow(imgs, batch_size=self.num_flow_images)[0]
+            flowed_imgs = [img.astype(np.uint8) for img in batch]  # convert from float32 0 to 255 to uint8 0 to 255
+
             flowed_imgs.append(base_img)  # append original non flowed image so we can crop and copy original cropped as well.
-            cropped_imgs = [img[0:self.y_hood_crop, 0:self.W] for img in flowed_imgs]
+            cropped_imgs = [img[0:self.y_hood_crop, 0:self.W] for img in flowed_imgs]  # crop out hood
             for k, img in enumerate(cropped_imgs):
                 cv2.imwrite('{}/{}/{}.{}.png'.format(self.proc_folder, image_class, photo[:-4], k), img)
 
@@ -318,11 +320,11 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
 
     def process_images(self):
         datagen = ImageDataGenerator(
-                rotation_range=2,
+                rotation_range=3,
                 width_shift_range=0,
                 height_shift_range=0,
                 shear_range=0,
-                zoom_range=0.15,
+                zoom_range=0.18,
                 horizontal_flip=True,
                 fill_mode='nearest')
 
