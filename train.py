@@ -19,14 +19,15 @@ import threading
 import time
 import shutil
 import pickle
+from utils.image_transformer import ImageTransformer
 
 
 config = tf.ConfigProto()
 config.gpu_options.per_process_gpu_memory_fraction = 0.95
 set_session(tf.Session(config=config))
 
-
-os.chdir(os.path.dirname(os.path.realpath(__file__)))  # todo: ensure this leads to traffic-lights home directory
+cur_dir = os.path.dirname(os.path.realpath(__file__))
+os.chdir(cur_dir)  # todo: ensure this leads to traffic-lights home directory
 
 
 def get_img_paths(typ, class_choice):
@@ -126,9 +127,9 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
         self.reduction = 2
         self.batch_size = 64
         self.test_percentage = 0.2  # percentage of total data to be validated on
-        self.num_flow_images = 7
+        self.num_flow_images = 10
 
-        self.limit_samples = 700
+        self.limit_samples = 500
 
         self.model = None
         # self.x_train = []
@@ -140,6 +141,9 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
         self.classes_processed = 0
         self.num_train = 0
         self.num_valid = 0
+        self.image_transformer = ImageTransformer(input_size=(self.W, self.H), crop_size=(self.W, self.y_hood_crop),
+                                                  num_output_imgs=self.num_flow_images, zoom_range=[0.88, 1.12],
+                                                  limit_samples=self.limit_samples, rotation_range=3.5)
 
     def do_init(self):
         self.check_data()
@@ -292,25 +296,35 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
         open('data/.finished', 'a').close()  # create finished file so we know in the future not to process data
         print('Finished, moving on to training!')
 
-    def flow_and_crop(self, image_class, photos, datagen):
-        t = time.time()
-        for idx, photo in enumerate(photos):
-            if time.time() - t > 10:
-                print('{}: Working on photo {} of {}.'.format(image_class, idx + 1, len(photos)))
-                t = time.time()
+    # def flow_and_crop(self, image_class, photos):
+    #     t = time.time()
+    #     for idx, photo in enumerate(photos):
+    #         if time.time() - t > 10:
+    #             print('{}: Working on photo {} of {}.'.format(image_class, idx + 1, len(photos)))
+    #             t = time.time()
+    #
+    #         base_img = cv2.imread('data/{}/{}'.format(image_class, photo))  # loads uint8 BGR array
+    #         imgs = np.array([base_img for _ in range(self.num_flow_images)])
+    #
+    #         # randomly transform images
+    #         batch = datagen.flow(imgs, batch_size=self.num_flow_images)[0]
+    #         flowed_imgs = [img.astype(np.uint8) for img in batch]  # convert from float32 0 to 255 to uint8 0 to 255
+    #
+    #         flowed_imgs.append(base_img)  # append original non flowed image so we can crop and copy original cropped as well.
+    #         cropped_imgs = [img[0:self.y_hood_crop, 0:self.W] for img in flowed_imgs]  # crop out hood
+    #         for k, img in enumerate(cropped_imgs):
+    #             cv2.imwrite('{}/{}/{}.{}.png'.format(self.proc_folder, image_class, photo[:-4], k), img)
+    #
+    #     self.classes_processed += 1
+    #     if self.classes_processed != 4:
+    #         print('{}: Finished!'.format(image_class))
+    #     else:
+    #         print('All finished!')
 
-            base_img = cv2.imread('data/{}/{}'.format(image_class, photo))  # loads uint8 BGR array
-            imgs = np.array([base_img for _ in range(self.num_flow_images)])
-
-            # randomly transform images
-            batch = datagen.flow(imgs, batch_size=self.num_flow_images)[0]
-            flowed_imgs = [img.astype(np.uint8) for img in batch]  # convert from float32 0 to 255 to uint8 0 to 255
-
-            flowed_imgs.append(base_img)  # append original non flowed image so we can crop and copy original cropped as well.
-            cropped_imgs = [img[0:self.y_hood_crop, 0:self.W] for img in flowed_imgs]  # crop out hood
-            for k, img in enumerate(cropped_imgs):
-                cv2.imwrite('{}/{}/{}.{}.png'.format(self.proc_folder, image_class, photo[:-4], k), img)
-
+    def process_class(self, image_class):
+        imgs = self.image_transformer.transform_from_directory('{}/data/{}'.format(cur_dir, image_class))
+        for k, img in enumerate(imgs):
+            cv2.imwrite('{}/{}/{}.png'.format(self.proc_folder, image_class, k), img)
         self.classes_processed += 1
         if self.classes_processed != 4:
             print('{}: Finished!'.format(image_class))
@@ -319,21 +333,22 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
 
 
     def process_images(self):
-        datagen = ImageDataGenerator(
-                rotation_range=3,
-                width_shift_range=0,
-                height_shift_range=0,
-                shear_range=0,
-                zoom_range=0.18,
-                horizontal_flip=True,
-                fill_mode='nearest')
+        # datagen = ImageDataGenerator(
+        #         rotation_range=3,
+        #         width_shift_range=0,
+        #         height_shift_range=0,
+        #         shear_range=0,
+        #         zoom_range=0.18,
+        #         horizontal_flip=True,
+        #         fill_mode='nearest')
 
         print('Starting {} threads to randomly transform and crop input images, please wait...'.format(len(self.classes)))
         for image_class in self.classes:
-            photos = os.listdir('data/{}'.format(image_class))
-            while len(photos) > self.limit_samples:
-                del photos[random.randint(0, len(photos) - 1)]
-            threading.Thread(target=self.flow_and_crop, args=(image_class, photos, datagen)).start()
+            # photos = os.listdir('data/{}'.format(image_class))
+            # while len(photos) > self.limit_samples:
+            #     del photos[random.randint(0, len(photos) - 1)]
+            threading.Thread(target=self.process_class, args=(image_class,)).start()
+            break
 
     def reset_data(self):
         if os.path.exists(self.proc_folder):
