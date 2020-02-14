@@ -1,8 +1,9 @@
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 from keras import backend as K
+# K.set_floatx('float16')
+# K.set_epsilon(1e-4)
 import os
-# from keras.preprocessing.image import ImageDataGenerator
 from keras.preprocessing.image import ImageDataGenerator
 import cv2
 import keras
@@ -14,19 +15,19 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 import numpy as np
 import random
-from shutil import copyfile
 import threading
 import time
 import shutil
 import pickle
+from data_generator import DataGenerator
 
 
-config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.95
-set_session(tf.Session(config=config))
+# config = tf.ConfigProto()
+# config.gpu_options.per_process_gpu_memory_fraction = 0.25
+# set_session(tf.Session(config=config))
 
-
-os.chdir(os.path.dirname(os.path.realpath(__file__)))  # todo: ensure this leads to traffic-lights home directory
+cur_dir = os.path.dirname(os.path.realpath(__file__))
+os.chdir(cur_dir)  # todo: ensure this leads to traffic-lights home directory
 
 
 def get_img_paths(typ, class_choice):
@@ -115,75 +116,6 @@ def save_model(name):
     traffic.model.save('models/h5_models/{}.h5'.format(name))
 
 
-class DataGenerator(keras.utils.Sequence):
-    def __init__(self, directory, labels, batch_size, shuffle=True):
-        self.directory = directory
-        self.labels = labels
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-        self.image_paths, self.image_labels = self.get_files()  # shuffles data
-        self.n = 0
-        self.max = self.__len__()
-
-    def get_files(self):
-        image_paths = []
-        image_labels = []
-        for label in self.labels:
-            label_path = '{}/{}'.format(self.directory, label)
-            for img in os.listdir(label_path):
-                image_paths.append('{}/{}'.format(label_path, img))
-                image_labels.append(self.one_hot(label))
-        return image_paths, image_labels
-
-    def shuffle_images(self):
-        combined = list(zip(self.image_paths, self.image_labels))
-        random.shuffle(combined)
-        self.image_paths, self.image_labels = zip(*combined)
-
-    def __len__(self):
-        return int(np.ceil(len(self.image_paths) / self.batch_size))
-
-    def __getitem__(self, idx):
-        batch_x = self.image_paths[idx * self.batch_size:(idx + 1) * self.batch_size]
-        batch_y = self.image_labels[idx * self.batch_size:(idx + 1) * self.batch_size]
-
-        return np.array([self.load_image(file_name) for file_name in batch_x]), np.array(batch_y)
-
-    def __next__(self):
-        if self.n >= self.max:  # next epoch
-            self.n = 0
-            if self.shuffle:
-                self.shuffle_images()  # shuffle each epoch
-
-        result = self.__getitem__(self.n)
-        self.n += 1
-        return result
-
-    def load_image(self, path):
-        return cv2.imread(path).astype(np.float32) / 255.
-
-    # def get_batch_shuffle(self):
-    #     while True:
-    #         x = []
-    #         y = []
-    #         for i in range(self.batch_size):
-    #             label = random.choice(self.labels)
-    #             images_with_label = self.directory_dict[label]
-    #             picked_image = random.choice(images_with_label)
-    #             path = '{}/{}/{}'.format(self.directory, label, picked_image)
-    #             img = cv2.imread(path).astype(np.float32) / 255.
-    #             x.append(img)
-    #             y.append(self.one_hot(label))
-    #         x = np.array(x)
-    #         y = np.array(y)
-    #         # return x, y
-    #         yield x, y
-
-    def one_hot(self, picked_class):
-        one = [0] * len(self.labels)
-        one[self.labels.index(picked_class)] = 1
-        return one
-
 
 class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
     def __init__(self, force_reset=False):
@@ -195,7 +127,7 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
         self.reduction = 2
         self.batch_size = 32
         self.test_percentage = 0.2  # percentage of total data to be validated on
-        self.num_flow_images = 10
+        self.num_flow_images = 5
 
         self.limit_samples = 500
 
@@ -219,12 +151,40 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
                 time.sleep(5)  # wait for background threads to finish processing images
                 if self.classes_processed == len(self.labels):
                     self.create_val_images()  # create validation set for model
+                    # self.store_arrays()
                     break
         # continue
         self.set_num_images()
         train_gen, valid_gen = self.get_generators()
-        self.train_batches(train_gen, valid_gen)
+        return train_gen, valid_gen
+        # self.train_batches(train_gen, valid_gen)
         # self.train()
+
+    def store_arrays(self):
+        for label in self.labels:
+            print('Converting {} images to arrays for faster loading...'.format(label))
+            label_path = '{}/{{}}/{}'.format(self.proc_folder, label)
+            for image in os.listdir(label_path.format('.train')):
+                img_path = '{}/{}'.format(label_path.format('.train'), image)
+                img_array = cv2.imread(img_path).astype(np.float32) / 255.
+                new_img_path = label_path.format('.train_pickle')
+                new_img_name = '.'.join(image.split('/')[-1].split('.')[:-1])
+                new_img_path = '{}/{}.p'.format(new_img_path, new_img_name)
+                h5f = h5py.File(new_img_path, 'w')
+                h5f.create_dataset('dataset1', data=img_array)
+                # np.savez_compressed(new_img_path, *[img_array for _ in range(128)])
+                print('done')
+                # with open(new_img_path, 'wb') as f:
+                #     pickle.dump(img_array, f)
+            for image in os.listdir(label_path.format('.validation')):
+                img_path = '{}/{}'.format(label_path.format('.validation'), image)
+                img_array = cv2.imread(img_path).astype(np.float32) / 255.
+                new_img_path = label_path.format('.validation_pickle')
+                new_img_name = '.'.join(image.split('/')[-1].split('.')[:-1])
+                new_img_path = '{}/{}.p'.format(new_img_path, new_img_name)
+                with open(new_img_path, 'wb') as f:
+                    pickle.dump(img_array, f)
+
 
     def train_batches(self, train_generator, valid_generator, restart=False):
         if self.model is None or restart:
@@ -239,12 +199,13 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
                            optimizer=opt,
                            metrics=['accuracy'])
 
-        train_steps = int(self.num_train / self.batch_size)  # doesn't have to be exact
-        valid_steps = int(self.num_valid / self.batch_size)
-        print('HERE!')
+        # train_steps = int(np.ceil(self.num_train / self.batch_size))  # calculated by keras with datagenerator now
+        # valid_steps = int(np.ceil(self.num_valid / self.batch_size))
+
         self.model.fit_generator(train_generator,
                                  epochs=100,
-                                 validation_data=valid_generator)
+                                 validation_data=valid_generator,
+                                 workers=8)
 
 
     # def train(self):
@@ -264,21 +225,20 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
     #                    batch_size=self.batch_size,
     #                    validation_data=(self.x_test, self.y_test))
 
+
     def get_model(self):
         kernel_size = (2, 2)  # (3, 3)
 
         model = Sequential()
-        model.add(Conv2D(8, kernel_size, activation='relu', input_shape=(self.y_hood_crop, self.W, 3)))
+        model.add(Conv2D(16, kernel_size, activation='relu', input_shape=(self.y_hood_crop, self.W, 3)))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         # model.add(BatchNormalization())
 
         model.add(Conv2D(16, kernel_size, activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
-        # model.add(BatchNormalization())
 
-        model.add(Conv2D(24, kernel_size, activation='relu'))
+        model.add(Conv2D(32, kernel_size, activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
-        # model.add(BatchNormalization())
 
         model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
         model.add(Dense(32, activation='relu'))
@@ -447,4 +407,6 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
 
 
 traffic = TrafficLightsModel(force_reset=False)  # todo: set force_reset to reset cropped data
-traffic.do_init()
+train_gen, valid_gen = traffic.do_init()
+if __name__ == '__main__':
+    traffic.train_batches(train_gen, valid_gen)
