@@ -1,26 +1,25 @@
-import tensorflow as tf
-from keras.backend.tensorflow_backend import set_session
-from keras import backend as K
 # K.set_floatx('float16')
 # K.set_epsilon(1e-4)
 import os
-from keras.preprocessing.image import ImageDataGenerator
-import cv2
-import keras
-from keras.models import Model
-from keras.models import Sequential
-from keras.layers import Conv2D, MaxPooling2D, BatchNormalization
-from keras.layers import Activation, Dropout, Flatten, Dense
-import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-import numpy as np
+import pickle
 import random
+import shutil
 import threading
 import time
-import shutil
-import pickle
-from data_generator import DataGenerator
 
+import cv2
+import keras
+import matplotlib.pyplot as plt
+import numpy as np
+from keras import backend as K
+from keras.layers import Conv2D, MaxPooling2D
+from keras.layers import Flatten, Dense
+from keras.models import Model
+from keras.models import Sequential
+from keras.preprocessing.image import ImageDataGenerator
+from sklearn.model_selection import train_test_split
+
+from data_generator import DataGenerator
 
 # config = tf.ConfigProto()
 # config.gpu_options.per_process_gpu_memory_fraction = 0.25
