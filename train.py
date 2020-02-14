@@ -19,15 +19,14 @@ import threading
 import time
 import shutil
 import pickle
-from utils.image_transformer import ImageTransformer
 
 
 config = tf.ConfigProto()
 config.gpu_options.per_process_gpu_memory_fraction = 0.95
 set_session(tf.Session(config=config))
 
-cur_dir = os.path.dirname(os.path.realpath(__file__))
-os.chdir(cur_dir)  # todo: ensure this leads to traffic-lights home directory
+
+os.chdir(os.path.dirname(os.path.realpath(__file__)))  # todo: ensure this leads to traffic-lights home directory
 
 
 def get_img_paths(typ, class_choice):
@@ -35,7 +34,7 @@ def get_img_paths(typ, class_choice):
 
 
 def show_preds():
-    class_choice = random.choice(traffic.keras_classes)
+    class_choice = random.choice(traffic.labels)
     x_test = get_img_paths('validation', class_choice)
     img_choice = random.choice(x_test)
     img = cv2.imread('{}/.validation/{}/{}'.format(traffic.proc_folder, class_choice, img_choice))
@@ -47,7 +46,7 @@ def show_preds():
     plt.clf()
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     plt.show()
-    plt.title('Prediction: {}'.format(traffic.keras_classes[pred]))
+    plt.title('Prediction: {}'.format(traffic.labels[pred]))
     plt.show()
 
 
@@ -116,16 +115,85 @@ def save_model(name):
     traffic.model.save('models/h5_models/{}.h5'.format(name))
 
 
+class DataGenerator(keras.utils.Sequence):
+    def __init__(self, directory, labels, batch_size, shuffle=True):
+        self.directory = directory
+        self.labels = labels
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.image_paths, self.image_labels = self.get_files()  # shuffles data
+        self.n = 0
+        self.max = self.__len__()
+
+    def get_files(self):
+        image_paths = []
+        image_labels = []
+        for label in self.labels:
+            label_path = '{}/{}'.format(self.directory, label)
+            for img in os.listdir(label_path):
+                image_paths.append('{}/{}'.format(label_path, img))
+                image_labels.append(self.one_hot(label))
+        return image_paths, image_labels
+
+    def shuffle_images(self):
+        combined = list(zip(self.image_paths, self.image_labels))
+        random.shuffle(combined)
+        self.image_paths, self.image_labels = zip(*combined)
+
+    def __len__(self):
+        return int(np.ceil(len(self.image_paths) / self.batch_size))
+
+    def __getitem__(self, idx):
+        batch_x = self.image_paths[idx * self.batch_size:(idx + 1) * self.batch_size]
+        batch_y = self.image_labels[idx * self.batch_size:(idx + 1) * self.batch_size]
+
+        return np.array([self.load_image(file_name) for file_name in batch_x]), np.array(batch_y)
+
+    def __next__(self):
+        if self.n >= self.max:  # next epoch
+            self.n = 0
+            if self.shuffle:
+                self.shuffle_images()  # shuffle each epoch
+
+        result = self.__getitem__(self.n)
+        self.n += 1
+        return result
+
+    def load_image(self, path):
+        return cv2.imread(path).astype(np.float32) / 255.
+
+    # def get_batch_shuffle(self):
+    #     while True:
+    #         x = []
+    #         y = []
+    #         for i in range(self.batch_size):
+    #             label = random.choice(self.labels)
+    #             images_with_label = self.directory_dict[label]
+    #             picked_image = random.choice(images_with_label)
+    #             path = '{}/{}/{}'.format(self.directory, label, picked_image)
+    #             img = cv2.imread(path).astype(np.float32) / 255.
+    #             x.append(img)
+    #             y.append(self.one_hot(label))
+    #         x = np.array(x)
+    #         y = np.array(y)
+    #         # return x, y
+    #         yield x, y
+
+    def one_hot(self, picked_class):
+        one = [0] * len(self.labels)
+        one[self.labels.index(picked_class)] = 1
+        return one
+
+
 class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
     def __init__(self, force_reset=False):
         self.W, self.H = 1164, 874
         self.y_hood_crop = 665  # pixels from top where to crop image to get rid of hood. this is perfect for smallish vehicles
-        self.classes = ['RED', 'GREEN', 'YELLOW', 'NONE']
-        self.keras_classes = ['GREEN', 'NONE', 'RED', 'YELLOW']
+        self.labels = ['RED', 'GREEN', 'YELLOW', 'NONE']
         self.proc_folder = 'data/.processed'
 
         self.reduction = 2
-        self.batch_size = 64
+        self.batch_size = 32
         self.test_percentage = 0.2  # percentage of total data to be validated on
         self.num_flow_images = 10
 
@@ -141,9 +209,6 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
         self.classes_processed = 0
         self.num_train = 0
         self.num_valid = 0
-        self.image_transformer = ImageTransformer(input_size=(self.W, self.H), crop_size=(self.W, self.y_hood_crop),
-                                                  num_output_imgs=self.num_flow_images, zoom_range=[0.88, 1.12],
-                                                  limit_samples=self.limit_samples, rotation_range=3.5)
 
     def do_init(self):
         self.check_data()
@@ -152,7 +217,7 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
             self.process_images()
             while True:
                 time.sleep(5)  # wait for background threads to finish processing images
-                if self.classes_processed == len(self.classes):
+                if self.classes_processed == len(self.labels):
                     self.create_val_images()  # create validation set for model
                     break
         # continue
@@ -176,10 +241,10 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
 
         train_steps = int(self.num_train / self.batch_size)  # doesn't have to be exact
         valid_steps = int(self.num_valid / self.batch_size)
-        self.model.fit_generator(train_generator, steps_per_epoch=train_steps,
+        print('HERE!')
+        self.model.fit_generator(train_generator,
                                  epochs=100,
-                                 validation_data=valid_generator,
-                                 validation_steps=valid_steps)
+                                 validation_data=valid_generator)
 
 
     # def train(self):
@@ -220,33 +285,39 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
         # model.add(Dropout(0.3))
         model.add(Dense(32, activation='relu'))
         # model.add(Dropout(0.3))
-        model.add(Dense(len(self.classes), activation='softmax'))
+        model.add(Dense(len(self.labels), activation='softmax'))
 
         return model
 
     def RGB2BGR(self, arr):  # easier to inference on, EON uses BGR images
-        print(type(arr))
-        rgb = cv2.cvtColor(np.float32(arr), cv2.COLOR_BGR2RGB)
+        rgb = cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
         return K.cast_to_floatx(rgb)
 
     def get_generators(self):
         train_dir = '{}/.train'.format(self.proc_folder)
         valid_dir = '{}/.validation'.format(self.proc_folder)
-        train_datagen = ImageDataGenerator(rescale=1./255)  # modified line 1248 to convert RGB to BGR
-        valid_datagen = ImageDataGenerator(rescale=1./255)
-
-        train_generator = train_datagen.flow_from_directory(
-            train_dir,
-            target_size=(self.y_hood_crop, self.W),  # height, width
-            batch_size=self.batch_size,
-            class_mode='categorical')
-
-        valid_generator = valid_datagen.flow_from_directory(
-            valid_dir,
-            target_size=(self.y_hood_crop, self.W),
-            batch_size=self.batch_size,
-            class_mode='categorical')
+        train_generator = DataGenerator(train_dir, self.labels, self.batch_size)  # keeps data in BGR format and normalizes
+        valid_generator = DataGenerator(valid_dir, self.labels, self.batch_size)
         return train_generator, valid_generator
+
+    # def get_generators(self):
+    #     train_dir = '{}/.train'.format(self.proc_folder)
+    #     valid_dir = '{}/.validation'.format(self.proc_folder)
+    #     train_datagen = ImageDataGenerator(rescale=1./255)  # modified line 1248 to convert RGB to BGR
+    #     valid_datagen = ImageDataGenerator(rescale=1./255)
+    #
+    #     train_generator = train_datagen.flow_from_directory(
+    #         train_dir,
+    #         target_size=(self.y_hood_crop, self.W),  # height, width
+    #         batch_size=self.batch_size,
+    #         class_mode='categorical')
+    #
+    #     valid_generator = valid_datagen.flow_from_directory(
+    #         valid_dir,
+    #         target_size=(self.y_hood_crop, self.W),
+    #         batch_size=self.batch_size,
+    #         class_mode='categorical')
+    #     return train_generator, valid_generator
 
     # def load_imgs(self):
     #     print('Loading data...', flush=True)
@@ -276,7 +347,7 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
     def create_val_images(self):
         print('Separating validation images!', flush=True)
         images = []
-        for idx, image_class in enumerate(self.classes):  # load all image names and class
+        for idx, image_class in enumerate(self.labels):  # load all image names and class
             class_dir = '{}/{}'.format(self.proc_folder, image_class)
             for image in os.listdir(class_dir):
                 images.append({'path': '{}/{}'.format(class_dir, image), 'class': image_class})
@@ -289,42 +360,32 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
             img_name = sample['path'].split('/')[-1]
             shutil.move(sample['path'], '{}/.validation/{}/{}'.format(self.proc_folder, sample['class'], img_name))
 
-        for image_class in self.classes:
+        for image_class in self.labels:
             io_sleep()
             os.rmdir('{}/{}'.format(self.proc_folder, image_class))  # should be empty, throw error if not
 
         open('data/.finished', 'a').close()  # create finished file so we know in the future not to process data
         print('Finished, moving on to training!')
 
-    # def flow_and_crop(self, image_class, photos):
-    #     t = time.time()
-    #     for idx, photo in enumerate(photos):
-    #         if time.time() - t > 10:
-    #             print('{}: Working on photo {} of {}.'.format(image_class, idx + 1, len(photos)))
-    #             t = time.time()
-    #
-    #         base_img = cv2.imread('data/{}/{}'.format(image_class, photo))  # loads uint8 BGR array
-    #         imgs = np.array([base_img for _ in range(self.num_flow_images)])
-    #
-    #         # randomly transform images
-    #         batch = datagen.flow(imgs, batch_size=self.num_flow_images)[0]
-    #         flowed_imgs = [img.astype(np.uint8) for img in batch]  # convert from float32 0 to 255 to uint8 0 to 255
-    #
-    #         flowed_imgs.append(base_img)  # append original non flowed image so we can crop and copy original cropped as well.
-    #         cropped_imgs = [img[0:self.y_hood_crop, 0:self.W] for img in flowed_imgs]  # crop out hood
-    #         for k, img in enumerate(cropped_imgs):
-    #             cv2.imwrite('{}/{}/{}.{}.png'.format(self.proc_folder, image_class, photo[:-4], k), img)
-    #
-    #     self.classes_processed += 1
-    #     if self.classes_processed != 4:
-    #         print('{}: Finished!'.format(image_class))
-    #     else:
-    #         print('All finished!')
+    def flow_and_crop(self, image_class, photos, datagen):
+        t = time.time()
+        for idx, photo in enumerate(photos):
+            if time.time() - t > 10:
+                print('{}: Working on photo {} of {}.'.format(image_class, idx + 1, len(photos)))
+                t = time.time()
 
-    def process_class(self, image_class):
-        imgs = self.image_transformer.transform_from_directory('{}/data/{}'.format(cur_dir, image_class))
-        for k, img in enumerate(imgs):
-            cv2.imwrite('{}/{}/{}.png'.format(self.proc_folder, image_class, k), img)
+            base_img = cv2.imread('data/{}/{}'.format(image_class, photo))  # loads uint8 BGR array
+            imgs = np.array([base_img for _ in range(self.num_flow_images)])
+
+            # randomly transform images
+            batch = datagen.flow(imgs, batch_size=self.num_flow_images)[0]
+            flowed_imgs = [img.astype(np.uint8) for img in batch]  # convert from float32 0 to 255 to uint8 0 to 255
+
+            flowed_imgs.append(base_img)  # append original non flowed image so we can crop and copy original cropped as well.
+            cropped_imgs = [img[0:self.y_hood_crop, 0:self.W] for img in flowed_imgs]  # crop out hood
+            for k, img in enumerate(cropped_imgs):
+                cv2.imwrite('{}/{}/{}.{}.png'.format(self.proc_folder, image_class, photo[:-4], k), img)
+
         self.classes_processed += 1
         if self.classes_processed != 4:
             print('{}: Finished!'.format(image_class))
@@ -333,22 +394,21 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
 
 
     def process_images(self):
-        # datagen = ImageDataGenerator(
-        #         rotation_range=3,
-        #         width_shift_range=0,
-        #         height_shift_range=0,
-        #         shear_range=0,
-        #         zoom_range=0.18,
-        #         horizontal_flip=True,
-        #         fill_mode='nearest')
+        datagen = ImageDataGenerator(
+                rotation_range=3.5,
+                width_shift_range=0,
+                height_shift_range=0,
+                shear_range=0,
+                zoom_range=0.18,
+                horizontal_flip=True,
+                fill_mode='nearest')
 
-        print('Starting {} threads to randomly transform and crop input images, please wait...'.format(len(self.classes)))
-        for image_class in self.classes:
-            # photos = os.listdir('data/{}'.format(image_class))
-            # while len(photos) > self.limit_samples:
-            #     del photos[random.randint(0, len(photos) - 1)]
-            threading.Thread(target=self.process_class, args=(image_class,)).start()
-            break
+        print('Starting {} threads to randomly transform and crop input images, please wait...'.format(len(self.labels)))
+        for image_class in self.labels:
+            photos = os.listdir('data/{}'.format(image_class))
+            while len(photos) > self.limit_samples:
+                del photos[random.randint(0, len(photos) - 1)]
+            threading.Thread(target=self.flow_and_crop, args=(image_class, photos, datagen)).start()
 
     def reset_data(self):
         if os.path.exists(self.proc_folder):
@@ -357,18 +417,18 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
         io_sleep()
         os.makedirs('{}/{}'.format(self.proc_folder, '.train'))
         os.mkdir('{}/{}'.format(self.proc_folder, '.validation'))
-        for image_class in self.classes:
+        for image_class in self.labels:
             os.mkdir('{}/{}'.format(self.proc_folder, image_class))
             os.mkdir('{}/.train/{}'.format(self.proc_folder, image_class))
             os.mkdir('{}/.validation/{}'.format(self.proc_folder, image_class))
 
     def set_num_images(self):
-        for cls in self.classes:
+        for cls in self.labels:
             self.num_train += len(os.listdir('{}/.train/{}'.format(self.proc_folder, cls)))
             self.num_valid += len(os.listdir('{}/.validation/{}'.format(self.proc_folder, cls)))
 
     def one_hot(self, idx):
-        one = [0] * len(self.classes)
+        one = [0] * len(self.labels)
         one[idx] = 1
         return one
 
@@ -378,7 +438,7 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
             os.mkdir('data')
             raise Exception('Please unzip the data.zip archive into data directory')
         data_files = os.listdir('data')
-        if not all([i in data_files for i in self.classes]):
+        if not all([i in data_files for i in self.labels]):
             raise Exception('Please unzip the data.zip archive into data directory')
 
     @property
