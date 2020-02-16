@@ -19,7 +19,8 @@ import threading
 import time
 import shutil
 import pickle
-from data_generator import DataGenerator
+from utils.data_generator import DataGenerator
+from utils.eta_tool import ETATool
 
 
 # config = tf.ConfigProto()
@@ -52,20 +53,76 @@ def show_preds():
     plt.show()
 
 
-def plot_features(layer_idx, img_idx=0, square=2):
+def plot_features(layer_idx, img_class=None, img_idx=None, square=2, filter_idx=None):
+    title_layer_idx = float(layer_idx)
+    fig = plt.figure(0)
+    fig.clf()
+    layers = [layer for layer in traffic.model.layers if 'conv' in layer.name]
+    layer_idx = [idx for idx, layer in enumerate(traffic.model.layers) if layer.name == layers[layer_idx].name][0]
+
+    if img_idx is None:
+        class_choice = random.choice(traffic.labels)
+    else:
+        class_choice = img_class
+    x_test = get_img_paths('validation', class_choice)
+    if img_idx is None:
+        img_choice = random.choice(x_test)
+    else:
+        img_choice = x_test[img_idx]
+    img = cv2.imread('{}/.validation/{}/{}'.format(traffic.proc_folder, class_choice, img_choice))
+    img = (img / 255).astype(np.float32)
+    print('Image index: {}'.format(x_test.index(img_choice)))
+
+    plt.imshow(traffic.BGR2RGB(img))
+
+    feature_model = Model(inputs=traffic.model.inputs, outputs=traffic.model.layers[layer_idx].output)
+    feature_maps = feature_model.predict(np.array([img]))
+    main_fig = plt.figure(1)
+    main_fig.clf()
+
+    if filter_idx is None:
+        ix = 1
+        for _ in range(square):
+            for _ in range(square):
+                # specify subplot and turn of axis
+                ax = main_fig.add_subplot(square, square, ix)
+                ax.set_xticks([])
+                ax.set_yticks([])
+                # plot filter channel in grayscale
+                plt.imshow(feature_maps[0, :, :, ix-1], cmap='gray')
+                ix += 1
+        # show the figure
+        # ax.title.set_text('Conv2D Layer Index: {}'.format(title_layer_idx))
+    else:
+        plt.imshow(feature_maps[0, :, :, filter_idx], cmap='gray')
+    plt.show()
+
+
+def plot_features_old(layer_idx, square=2, img_class=None, img_idx=None):
     title_layer_idx = float(layer_idx)
     fig = plt.figure(0)
     fig.clf()
     layers = [layer for layer in traffic.model.layers if 'pool' in layer.name]
     layer_idx = [idx for idx, layer in enumerate(traffic.model.layers) if layer.name == layers[layer_idx].name][0]
 
-    img = traffic.x_test[img_idx]
+    if img_idx is None:
+        class_choice = random.choice(traffic.labels)
+    else:
+        class_choice = img_class
+    x_test = get_img_paths('validation', class_choice)
+    if img_idx is None:
+        img_choice = random.choice(x_test)
+    else:
+        img_choice = x_test[img_idx]
+    img = cv2.imread('{}/.validation/{}/{}'.format(traffic.proc_folder, class_choice, img_choice))
+    img = (img / 255).astype(np.float32)
+    print('Image index: {}'.format(x_test.index(img_choice)))
 
     plt.imshow(traffic.BGR2RGB(img))
 
     feature_model = Model(inputs=traffic.model.inputs, outputs=traffic.model.layers[layer_idx].output)
     feature_maps = feature_model.predict(np.array([img]))
-    main_fig = plt.figure()
+    main_fig = plt.figure(1)
     main_fig.clf()
 
     ix = 1
@@ -80,7 +137,7 @@ def plot_features(layer_idx, img_idx=0, square=2):
             ix += 1
     # show the figure
     ax.title.set_text('Conv2D Layer Index: {}'.format(title_layer_idx))
-    # plt.show()
+    plt.show()
 
 
 def plot_filters(layer_idx=0):
@@ -120,44 +177,47 @@ def save_model(name):
 
 class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
     def __init__(self, force_reset=False):
-        self.W, self.H = 1164, 874
-        self.y_hood_crop = 665  # pixels from top where to crop image to get rid of hood. this is perfect for smallish vehicles
+        self.eta_tool = ETATool()
+        # self.W, self.H = 1164, 874
+        self.y_hood_crop = 665  # pixels from top where to crop image to get rid of hood.
+        self.cropped_shape = (515, 814, 3)
         self.labels = ['RED', 'GREEN', 'YELLOW', 'NONE']
         self.proc_folder = 'data/.processed'
 
-        self.reduction = 2
+        # self.reduction = 2
         self.batch_size = 32
         self.test_percentage = 0.2  # percentage of total data to be validated on
-        self.num_flow_images = 5
+        self.num_flow_images = 3
+        self.datagen_workers = 12
 
-        self.limit_samples = 500
+        self.limit_samples = 1400
 
         self.model = None
 
-        self.reset_proc = force_reset
-        self.classes_processed = 0
+        self.force_reset = force_reset
         self.num_train = 0
         self.num_valid = 0
+        self.finished_file = 'data/.finished'
+        self.class_weight = {}
+
+        self.threads = 0
+        self.max_threads = 25  # dependant on your CPU, set lower if it starts to freeze
 
     def do_init(self):
         self.check_data()
         if self.needs_reset:
             self.reset_data()
             self.process_images()
-            while True:
-                time.sleep(5)  # wait for background threads to finish processing images
-                if self.classes_processed == len(self.labels):
-                    self.create_val_images()  # create validation set for model
-                    # self.store_arrays()
-                    break
+            self.create_val_images()  # create validation set for model
+
         # continue
-        self.set_num_images()
+        self.set_class_weight()
         train_gen, valid_gen = self.get_generators()
         return train_gen, valid_gen
         # self.train_batches(train_gen, valid_gen)
 
 
-    def train_batches(self, train_generator, valid_generator, restart=False):
+    def train_batches(self, train_generator, valid_generator, restart=False, epochs=10):
         if self.model is None or restart:
             self.model = self.get_model()
 
@@ -171,28 +231,33 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
                            metrics=['accuracy'])
 
         self.model.fit_generator(train_generator,
-                                 epochs=100,
+                                 epochs=epochs,
                                  validation_data=valid_generator,
-                                 workers=8)
+                                 workers=self.datagen_workers,
+                                 class_weight=self.class_weight)
 
     def get_model(self):
         kernel_size = (2, 2)  # (3, 3)
 
         model = Sequential()
-        model.add(Conv2D(16, kernel_size, activation='relu', input_shape=(self.y_hood_crop, self.W, 3)))
+        model.add(Conv2D(8, kernel_size, activation='relu', input_shape=self.cropped_shape))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         # model.add(BatchNormalization())
 
-        model.add(Conv2D(16, kernel_size, activation='relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(Conv2D(12, kernel_size, activation='relu'))
+        model.add(MaxPooling2D(pool_size=(3, 3)))
 
         model.add(Conv2D(32, kernel_size, activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
+        model.add(Conv2D(48, kernel_size, activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+
+
         model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
         model.add(Dense(32, activation='relu'))
         # model.add(Dropout(0.3))
-        model.add(Dense(32, activation='relu'))
+        model.add(Dense(16, activation='relu'))
         # model.add(Dropout(0.3))
         model.add(Dense(len(self.labels), activation='softmax'))
 
@@ -205,7 +270,7 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
         train_dir = '{}/.train'.format(self.proc_folder)
         valid_dir = '{}/.validation'.format(self.proc_folder)
         train_generator = DataGenerator(train_dir, self.labels, self.batch_size)  # keeps data in BGR format and normalizes
-        valid_generator = DataGenerator(valid_dir, self.labels, self.batch_size)
+        valid_generator = DataGenerator(valid_dir, self.labels, self.batch_size * 2)
         return train_generator, valid_generator
 
     def create_val_images(self):
@@ -228,55 +293,81 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
             io_sleep()
             os.rmdir('{}/{}'.format(self.proc_folder, image_class))  # should be empty, throw error if not
 
-        open('data/.finished', 'a').close()  # create finished file so we know in the future not to process data
+        open(self.finished_file, 'a').close()  # create finished file so we know in the future not to process data
         print('Finished, moving on to training!')
 
-    def flow_and_crop(self, image_class, photos, datagen):
+    def transform_and_crop_image(self, image_class, photo, datagen):
+        self.threads += 1
+        base_img = cv2.imread('data/{}/{}'.format(image_class, photo))  # loads uint8 BGR array
+        imgs = np.array([base_img for _ in range(self.num_flow_images)])
+
+        # randomly transform images
+        try:
+            batch = datagen.flow(imgs, batch_size=self.num_flow_images)[0]
+        except:
+            print(imgs)
+            print(photo)
+            raise Exception()
+        flowed_imgs = [img.astype(np.uint8) for img in batch]  # convert from float32 0 to 255 to uint8 0 to 255
+
+        flowed_imgs.append(base_img)  # append original non flowed image so we can crop and copy original cropped as well.
+        cropped_imgs = [self.crop_image(img) for img in flowed_imgs]
+        for k, img in enumerate(cropped_imgs):
+            cv2.imwrite('{}/{}/{}.{}.png'.format(self.proc_folder, image_class, photo[:-4], k), img)
+        self.threads -= 1
+
+    def process_class(self, image_class, photos, datagen):  # manages processing threads
         t = time.time()
+        self.eta_tool.init(t, len(photos))
         for idx, photo in enumerate(photos):
-            if time.time() - t > 10:
-                print('{}: Working on photo {} of {}.'.format(image_class, idx + 1, len(photos)))
+            self.eta_tool.log(idx, time.time())
+            if time.time() - t > 15:
+                # print('{}: Working on photo {} of {}.'.format(image_class, idx + 1, len(photos)))
+                print('{}: Time to completion: {}'.format(image_class, self.eta_tool.get_eta))
                 t = time.time()
 
-            base_img = cv2.imread('data/{}/{}'.format(image_class, photo))  # loads uint8 BGR array
-            imgs = np.array([base_img for _ in range(self.num_flow_images)])
+            threading.Thread(target=self.transform_and_crop_image, args=(image_class, photo, datagen)).start()
+            while self.threads > self.max_threads:
+                pass
 
-            # randomly transform images
-            batch = datagen.flow(imgs, batch_size=self.num_flow_images)[0]
-            flowed_imgs = [img.astype(np.uint8) for img in batch]  # convert from float32 0 to 255 to uint8 0 to 255
+        while self.threads != 0:  # wait for all threads to complete before continuing
+            pass
+        print('{}: Finished!'.format(image_class))
 
-            flowed_imgs.append(base_img)  # append original non flowed image so we can crop and copy original cropped as well.
-            cropped_imgs = [img[0:self.y_hood_crop, 0:self.W] for img in flowed_imgs]  # crop out hood
-            for k, img in enumerate(cropped_imgs):
-                cv2.imwrite('{}/{}/{}.{}.png'.format(self.proc_folder, image_class, photo[:-4], k), img)
 
-        self.classes_processed += 1
-        if self.classes_processed != 4:
-            print('{}: Finished!'.format(image_class))
-        else:
-            print('All finished!')
+    def crop_image(self, img_array):
+        h_crop = 175  # horizontal, 150 is good, need to test higher vals
+        t_crop = 150  # top, 100 is good. test higher vals
+        return img_array[t_crop:self.y_hood_crop, h_crop:-h_crop]  # removes 150 pixels from each side, removes hood, and removes 100 pixels from top
 
     def process_images(self):
         datagen = ImageDataGenerator(
-                rotation_range=3.5,
+                rotation_range=3.75,
                 width_shift_range=0,
                 height_shift_range=0,
                 shear_range=0,
-                zoom_range=0.18,
-                horizontal_flip=True,
+                zoom_range=0.15,
+                horizontal_flip=False,  # todo: testing false
                 fill_mode='nearest')
 
-        print('Starting {} threads to randomly transform and crop input images, please wait...'.format(len(self.labels)))
+        print('Randomly transforming and cropping input images, please wait...'.format(len(self.labels)))
+        print('Your system may slow until the process completes. Try reducing the max threads if it locks up.')
         for image_class in self.labels:
             photos = os.listdir('data/{}'.format(image_class))
+            random.shuffle(photos)
+
             while len(photos) > self.limit_samples:
                 del photos[random.randint(0, len(photos) - 1)]
-            threading.Thread(target=self.flow_and_crop, args=(image_class, photos, datagen)).start()
+
+            self.process_class(image_class, photos, datagen)
+        print('All finished!')
 
     def reset_data(self):
         if os.path.exists(self.proc_folder):
             shutil.rmtree(self.proc_folder, ignore_errors=True)
-
+        finished_file = self.finished_file
+        if os.path.exists(finished_file):
+            os.remove(finished_file)
         io_sleep()
         os.makedirs('{}/{}'.format(self.proc_folder, '.train'))
         os.mkdir('{}/{}'.format(self.proc_folder, '.validation'))
@@ -285,10 +376,16 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
             os.mkdir('{}/.train/{}'.format(self.proc_folder, image_class))
             os.mkdir('{}/.validation/{}'.format(self.proc_folder, image_class))
 
-    def set_num_images(self):
-        for cls in self.labels:
-            self.num_train += len(os.listdir('{}/.train/{}'.format(self.proc_folder, cls)))
-            self.num_valid += len(os.listdir('{}/.validation/{}'.format(self.proc_folder, cls)))
+    def set_class_weight(self):
+        image_label_nums = {}
+        for label in self.labels:
+            image_label_nums[label] = len(os.listdir('{}/.train/{}'.format(self.proc_folder, label)))
+            # self.num_train += len(os.listdir('{}/.train/{}'.format(self.proc_folder, cls)))
+            # self.num_valid += len(os.listdir('{}/.validation/{}'.format(self.proc_folder, cls)))
+        for label in self.labels:
+            self.class_weight[self.labels.index(label)] = 1 / (image_label_nums[label] / max(image_label_nums.values()))  # get class weight. class with 50 samples and max 100 gets assigned 2.0
+        tmp_prnt = {self.labels[cls]: self.class_weight[cls] for cls in self.class_weight}
+        print('Class weights: {}'.format(tmp_prnt))
 
     def one_hot(self, idx):
         one = [0] * len(self.labels)
@@ -306,7 +403,7 @@ class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
 
     @property
     def needs_reset(self):
-        return not os.path.exists('data/.finished')
+        return not os.path.exists(self.finished_file) or self.force_reset
 
 
 traffic = TrafficLightsModel(force_reset=False)  # todo: set force_reset to reset cropped data
