@@ -5,7 +5,7 @@ import random
 import numpy as np
 import cv2
 
-os.chdir(os.path.dirname(os.path.realpath(__file__)))  # todo: ensure this leads to traffic-lights home directory
+# os.chdir(os.path.dirname(os.path.realpath(__file__)))  # todo: ensure this leads to traffic-lights home directory
 
 
 class DataGenerator(keras.utils.Sequence):

@@ -3,9 +3,10 @@ from keras import backend as K
 import tensorflow as tf
 import os
 from keras.models import load_model
+from utils.basedir import BASEDIR
 #from tensorflow.keras.models import load_model
 
-os.chdir(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../models'))  # todo: ensure this leads to traffic-lights models directory
+os.chdir('{}/models'.format(BASEDIR))
 
 K.clear_session()
 def freeze_session(session, keep_var_names=None, output_names=None, clear_devices=True):

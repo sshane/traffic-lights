@@ -21,15 +21,14 @@ import shutil
 import pickle
 from utils.data_generator import DataGenerator
 from utils.eta_tool import ETATool
+from utils.basedir import BASEDIR
 
 
 # config = tf.ConfigProto()
 # config.gpu_options.per_process_gpu_memory_fraction = 0.25
 # set_session(tf.Session(config=config))
 
-cur_dir = os.path.dirname(os.path.realpath(__file__))
-os.chdir(cur_dir)  # todo: ensure this leads to traffic-lights home directory
-
+os.chdir(BASEDIR)
 
 def get_img_paths(typ, class_choice):
     return os.listdir('{}/.{}/{}'.format(traffic.proc_folder, typ, class_choice))
