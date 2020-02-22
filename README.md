@@ -4,4 +4,4 @@
 
 To start training, first unzip data.zip into the root directory of `traffic-lights` so that the directory tree looks like: `/traffic-lights/data/GREEN/etc.png`.
 
-When you run train.py, it will then start a process of cropping images from the data set into the `/traffic-lights/data/flowed` directory.
+When you run train.py, it will then start a process of cropping images from the data set into the `/traffic-lights/data/.processed` directory.
