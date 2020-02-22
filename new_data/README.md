@@ -1,6 +1,6 @@
 # traffic-lights/new_data
 
-Simply place raw `.hevc` files into the `./videos` directory. They will be extracted as raw `.png` frames into `./extracted/{video_name}.{frame_idx}.png`
+Simply place `.hevc` files into the `./videos` directory. They will be extracted as `.png` frames into `traffic-lights/new_data/extracted/{video_name}/{frame_idx}.png`
 
 To start extraction, run:
 
