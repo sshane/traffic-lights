@@ -3,3 +3,5 @@ data/
 models/
 *.hevc
 new_data/extracted/
+utils/JWT.py
+*.zip
