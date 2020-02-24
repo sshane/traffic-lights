@@ -8,6 +8,7 @@ import time
 
 BASEDIR = os.path.join(BASEDIR, 'new_data')
 extracted_dir = '{}/extracted'.format(BASEDIR)
+done_dir = '{}/done'.format(BASEDIR)
 os.chdir(BASEDIR)
 
 num_threads = 0
@@ -47,8 +48,11 @@ def wait_for_threads():
         time.sleep(1 / max_threads)
 
 
-def rm_video(path):
-    os.remove(path)
+def rm_video(path, name):
+    if not os.path.exists(done_dir):
+        os.mkdir(done_dir)
+    # os.remove(path)
+    os.rename(path, '{}/{}.hevc'.format(done_dir, name))
 
 
 def extract_frames():
@@ -76,7 +80,7 @@ def extract_frames():
         cap.release()
         cv2.destroyAllWindows()
         wait_for_threads()  # wait for all threads to finish before starting next video
-        rm_video(video_path)  # delete video once done
+        rm_video(video_path, save_name)  # delete video once done
         if stop_working():
             print('Working file deleted, stopping!')
             return
