@@ -2,6 +2,7 @@ import requests
 from utils.JWT import JWT
 from utils.basedir import BASEDIR
 import os
+import time
 
 BASEDIR = os.path.join(BASEDIR, 'new_data')
 downloaded_dir = '{}/downloaded'.format(BASEDIR)
@@ -27,5 +28,6 @@ for idx, video_url in enumerate(video_urls):
     video = requests.get(video_url)
     with open('{}/{}'.format(downloaded_dir, video_name), 'wb') as f:
         f.write(video.content)
+    time.sleep(2)
 
 print('Successfully downloaded!')
