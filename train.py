@@ -174,7 +174,7 @@ def save_model(name):
 
 
 
-class TrafficLightsModel:  # TODO: USE KERAS IMAGE LOADER
+class TrafficLightsModel:
     def __init__(self, force_reset=False):
         self.eta_tool = ETATool()
         # self.W, self.H = 1164, 874
