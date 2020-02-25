@@ -173,7 +173,6 @@ def save_model(name):
     traffic.model.save('models/h5_models/{}.h5'.format(name))
 
 
-
 class TrafficLightsModel:
     def __init__(self, force_reset=False):
         self.eta_tool = ETATool()
@@ -184,12 +183,12 @@ class TrafficLightsModel:
         self.proc_folder = 'data/.processed'
 
         # self.reduction = 2
-        self.batch_size = 32
+        self.batch_size = 16
         self.test_percentage = 0.2  # percentage of total data to be validated on
-        self.num_flow_images = 3
-        self.datagen_workers = 12
+        self.num_flow_images = 3  # number of extra images to randomly generate per each input image
+        self.dataloader_workers = 20  # used by keras to load input images, there is diminishing returns at high values (>~10)
 
-        self.limit_samples = 1400
+        self.limit_samples = 1800
 
         self.model = None
 
@@ -199,12 +198,13 @@ class TrafficLightsModel:
         self.finished_file = 'data/.finished'
         self.class_weight = {}
 
-        self.threads = 0
-        self.max_threads = 25  # dependant on your CPU, set lower if it starts to freeze
+        self.datagen_threads = 0
+        self.datagen_max_threads = 30  # used to generate randomly transformed data (dependant on your CPU, set lower if it starts to freeze)
 
     def do_init(self):
         self.check_data()
         if self.needs_reset:
+            self.reset_countdown()
             self.reset_data()
             self.process_images()
             self.create_val_images()  # create validation set for model
@@ -232,7 +232,7 @@ class TrafficLightsModel:
         self.model.fit_generator(train_generator,
                                  epochs=epochs,
                                  validation_data=valid_generator,
-                                 workers=self.datagen_workers,
+                                 workers=self.dataloader_workers,
                                  class_weight=self.class_weight)
 
     def get_model(self):
@@ -296,7 +296,7 @@ class TrafficLightsModel:
         print('Finished, moving on to training!')
 
     def transform_and_crop_image(self, image_class, photo, datagen):
-        self.threads += 1
+        self.datagen_threads += 1
         base_img = cv2.imread('data/{}/{}'.format(image_class, photo))  # loads uint8 BGR array
         imgs = np.array([base_img for _ in range(self.num_flow_images)])
 
@@ -313,7 +313,7 @@ class TrafficLightsModel:
         cropped_imgs = [self.crop_image(img) for img in flowed_imgs]
         for k, img in enumerate(cropped_imgs):
             cv2.imwrite('{}/{}/{}.{}.png'.format(self.proc_folder, image_class, photo[:-4], k), img)
-        self.threads -= 1
+        self.datagen_threads -= 1
 
     def process_class(self, image_class, photos, datagen):  # manages processing threads
         t = time.time()
@@ -326,13 +326,25 @@ class TrafficLightsModel:
                 t = time.time()
 
             threading.Thread(target=self.transform_and_crop_image, args=(image_class, photo, datagen)).start()
-            while self.threads > self.max_threads:
+            time.sleep(1 / 7.)  # spin up threads slightly slower
+            while self.datagen_threads > self.datagen_max_threads:
                 pass
 
-        while self.threads != 0:  # wait for all threads to complete before continuing
+        while self.datagen_threads != 0:  # wait for all threads to complete before continuing
             pass
         print('{}: Finished!'.format(image_class))
 
+    def reset_countdown(self):
+        if os.path.exists(self.proc_folder):  # don't show message if no data to delete
+            print('WARNING: RESETTING PROCESSED DATA!', flush=True)
+            print('This means all randomly transformed images will be erased and regenerated. Which may take some time depending on the amount of data you have.', flush=True)
+            time.sleep(2)
+            for i in range(8):
+                sec = 8 - i
+                multi = 's' if sec > 1 else ''  # gotta be grammatically correcet
+                print('Resetting data in {} second{}!'.format(sec, multi))
+                time.sleep(1.2)
+            print('RESETTING DATA NOW', flush=True)
 
     def crop_image(self, img_array):
         h_crop = 175  # horizontal, 150 is good, need to test higher vals
