@@ -35,13 +35,15 @@ class AutoClassifier:
     def show_imgs(self):
         for route in [i for i in self.routes if 'already_classified' not in i]:
             route_dir = '{}/{}'.format(self.extracted_dir, route)
+            list_dir = self.sort_list_dir(os.listdir(route_dir))  # sorted using integar values of frame idx
+            print('Route: {}'.format(route))
             print('Loading all images from route to predict, please wait...')
-            all_imgs = self.load_imgs_from_directory(route_dir)
+            all_imgs = self.load_imgs_from_directory(list_dir, route_dir)
             predictions = self.predict_multiple(all_imgs)
             del all_imgs  # free unused memory
             print('Valid inputs: [Correct/{class}/skip {num frames}]')
-            for idx, img_name in enumerate(os.listdir(route_dir)):
-                if self.skip != 0:  # this skips ahead in time
+            for idx, img_name in enumerate(list_dir):
+                if self.skip != 0 and self.user_skip == 0:  # this skips ahead in time
                     self.skip -= 1
                     continue
                 else:
@@ -49,7 +51,6 @@ class AutoClassifier:
 
                 if self.user_skip != 0:
                     self.user_skip -= 1
-                    self.skip = 0  # wait until user skip completes
                     continue
                 print('At frame: {}'.format(idx))
 
@@ -79,9 +80,13 @@ class AutoClassifier:
             self.move_folder(route_dir, self.already_classified_dir)
             print('Next video!')
 
-    def load_imgs_from_directory(self, route_dir):
+    def sort_list_dir(self, list_dir):  # because the way os and sorted() sorts the files is incorrect but technically correct
+        file_nums = [int(file.split('.')[-2]) for file in list_dir]
+        return [fi_num for _, fi_num in sorted(zip(file_nums, list_dir))]
+
+    def load_imgs_from_directory(self, list_dir, route_dir):
         imgs = []
-        for img_name in os.listdir(route_dir):
+        for img_name in list_dir:
             img_path = '{}/{}'.format(route_dir, img_name)
             img = np.array((cv2.imread(img_path) / 255.0), dtype=np.float32)
             imgs.append(img)
