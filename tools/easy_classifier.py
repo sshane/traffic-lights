@@ -12,7 +12,7 @@ import shutil
 
 os.chdir(BASEDIR)
 
-class AutoClassifier:
+class EasyClassifier:
     def __init__(self):
         self.labels = ['RED', 'GREEN', 'YELLOW', 'NONE']
         self.data_dir = 'data'
@@ -158,4 +158,4 @@ class AutoClassifier:
             pass
 
 
-auto_classifier = AutoClassifier()
+auto_classifier = EasyClassifier()
