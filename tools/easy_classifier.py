@@ -109,16 +109,23 @@ class EasyClassifier:
                 return {'label': model_pred, 'correct': True, 'skip': False}
             elif 'SKIP' in u_input:
                 u_input = u_input.split(' ')
-                if len(u_input) == 2:
-                    try:
-                        skip_parsed = float(u_input[1])
-                        self.user_skip = max(int(skip_parsed * self.frame_rate) - 1, 0)
-                        self.skip = 0  # don't auto skip if user requests to skip
-                        print('Skipping {} frames!'.format(self.user_skip))
-                        return {'label': None, 'correct': None, 'skip': True}
-                    except:
-                        print('Exception when parsing input to skip, try again!')
+                try:
+                    skip_parsed = float(u_input[1])
+                    if len(u_input) == 3:  # if followed by 'now', skip now
+                        if u_input[-1] == 'NOW':
+                            self.user_skip = max(int(skip_parsed * self.frame_rate), 0)
+                            self.skip = 0
+                            print('Skipping {} frames!'.format(self.user_skip))
+                            return {'label': None, 'correct': None, 'skip': True}
+                    elif len(u_input) == 2:  # else set default skip
+                        self.default_skip = max(int(skip_parsed * self.frame_rate), 0)
+                        self.skip = int(self.default_skip)
+                        self.user_skip = 0
+                        print('Set skipping to {} frames!'.format(self.default_skip))
                         continue
+                except:
+                    print('Exception when parsing input to skip, try again!')
+                    continue
             print('Invalid input, try again!')
 
     def move_folder(self, source, destination):
