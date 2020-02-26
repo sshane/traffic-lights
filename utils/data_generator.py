@@ -1,11 +1,8 @@
 import keras
 import os
-import time
 import random
 import numpy as np
 import cv2
-
-# os.chdir(os.path.dirname(os.path.realpath(__file__)))  # todo: ensure this leads to traffic-lights home directory
 
 
 class DataGenerator(keras.utils.Sequence):
@@ -20,12 +17,9 @@ class DataGenerator(keras.utils.Sequence):
         self.max = self.__len__()
 
     def __getitem__(self, idx):
-        # t = time.time()
         batch_x = self.image_paths[idx * self.batch_size:(idx + 1) * self.batch_size]
         batch_y = self.image_labels[idx * self.batch_size:(idx + 1) * self.batch_size]
         x = np.array([self.load_image(file_name) for file_name in batch_x])
-        # print('\nload images:')
-        # print(time.time() - t)
         y = np.array(batch_y)
         return x, y
 
@@ -47,7 +41,7 @@ class DataGenerator(keras.utils.Sequence):
 
     def shuffle_images(self):
         combined = list(zip(self.image_paths, self.image_labels))
-        random.shuffle(combined)
+        random.shuffle(combined)  # shuffle, keeping order
         self.image_paths, self.image_labels = zip(*combined)
 
     def load_image(self, path):
@@ -55,7 +49,11 @@ class DataGenerator(keras.utils.Sequence):
         # arr = np.array(img)
         # return np.asarray(Image.open(path), dtype=np.float32) / 255
         # return imread(path)[..., [2, 1, 0]]
-        return cv2.imread(path).astype(np.float32) / 255.  # seems to be the fastest
+        YUV = False
+        img = cv2.imread(path).astype(np.float32) / 255.  # seems to be the fastest
+        if YUV:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+        return img
 
     def one_hot(self, picked_class):
         one = [0] * len(self.labels)
