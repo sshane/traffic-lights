@@ -12,7 +12,8 @@ import shutil
 
 os.chdir(BASEDIR)
 
-class EasyClassifier:
+
+class EasyClassifier:  # todo: implement smart skip. low skip value when model predicts traffic light, high skip when model predicts none
     def __init__(self):
         self.labels = ['RED', 'GREEN', 'YELLOW', 'NONE']
         self.data_dir = 'data'
@@ -59,7 +60,7 @@ class EasyClassifier:
 
                 img = cv2.imread(img_path)
                 plt.clf()
-                plt.imshow(self.crop_image(self.BGR2RGB(img)))
+                plt.imshow(self.crop_image(self.BGR2RGB(img), False))
 
                 pred = predictions[idx]
                 pred_idx = np.argmax(pred)
@@ -141,16 +142,15 @@ class EasyClassifier:
         self.user_skip = 0
 
     def predict_multiple(self, imgs):
-        imgs_cropped = [self.crop_image(img) for img in imgs]
+        imgs_cropped = [self.crop_image(img, True) for img in imgs]
         return self.model.predict(np.array(imgs_cropped))
 
-    def get_prediction(self, img):
-        img_cropped = self.crop_image(img)
-        return self.model.predict(np.array([img_cropped / 255.0], dtype=np.float32))[0]
-
-    def crop_image(self, img_array):
+    def crop_image(self, img_array, crop_top):
         h_crop = 175  # horizontal, 150 is good, need to test higher vals
-        t_crop = 150  # top, 100 is good. test higher vals
+        if crop_top:
+            t_crop = 150  # top, 100 is good. test higher vals
+        else:
+            t_crop = 0
         y_hood_crop = 665
         return img_array[t_crop:y_hood_crop, h_crop:-h_crop]  # removes 150 pixels from each side, removes hood, and removes 100 pixels from top
 
