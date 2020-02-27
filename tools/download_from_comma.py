@@ -22,7 +22,7 @@ if not os.path.exists(downloaded_dir):
     os.mkdir(downloaded_dir)
 
 for idx, video_url in enumerate(video_urls):
-    print('Downloading video {} of {}...'.format(idx, len(video_urls)))
+    print('Downloading video {} of {}...'.format(idx + 1, len(video_urls)))
     video_name = video_url.split('_')[-1]
     video_name = (video_name[:video_name.index(video_extension) + len(video_extension)])
     video = requests.get(video_url)
