@@ -158,9 +158,12 @@ class EasyClassifier:
 
     def make_dirs(self):
         try:
-            os.makedirs(self.already_classified_dir)
             for lbl in self.labels:
                 os.makedirs('{}/{}'.format(self.to_add_dir, lbl))
+        except:
+            pass
+        try:
+            os.makedirs(self.already_classified_dir)
         except:
             pass
 
