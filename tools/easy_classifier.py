@@ -37,8 +37,9 @@ class EasyClassifier:
             route_dir = '{}/{}'.format(self.extracted_dir, route)
             list_dir = self.sort_list_dir(os.listdir(route_dir))  # sorted using integar values of frame idx
             print('Route: {}'.format(route))
-            print('Loading all images from route to predict, please wait...')
+            print('Loading all images from route to predict, please wait...', flush=True)
             all_imgs = self.load_imgs_from_directory(list_dir, route_dir)
+            print('Loaded all images! Now predicting...', flush=True)
             predictions = self.predict_multiple(all_imgs)
             del all_imgs  # free unused memory
             print('Valid inputs: [Correct/{class}/skip {num frames}]')
