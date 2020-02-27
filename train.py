@@ -178,7 +178,7 @@ class TrafficLightsModel:
         self.eta_tool = ETATool()
         # self.W, self.H = 1164, 874
         self.y_hood_crop = 665  # pixels from top where to crop image to get rid of hood.
-        self.cropped_shape = (515, 814, 3)
+        self.cropped_shape = (665, 814, 3)
         self.labels = ['RED', 'GREEN', 'YELLOW', 'NONE']
         self.proc_folder = 'data/.processed'
 
@@ -348,7 +348,7 @@ class TrafficLightsModel:
 
     def crop_image(self, img_array):
         h_crop = 175  # horizontal, 150 is good, need to test higher vals
-        t_crop = 150  # top, 100 is good. test higher vals
+        t_crop = 0  # top, 100 is good. test higher vals
         return img_array[t_crop:self.y_hood_crop, h_crop:-h_crop]  # removes 150 pixels from each side, removes hood, and removes 100 pixels from top
 
     def process_images(self):
