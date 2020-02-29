@@ -17,7 +17,8 @@ class CommaVideoDownloader:
             This tool allows multiple simultaneous downloads, simply keep pasting route names and hit enter.
             Copying and pasting directly from your browser is supported, so if Chrome replaces | with %7C, it will still work.
             For example: 'e010b634f3d65cdb%7C2020-02-26--07-03-49'
-            To get a list of drives, go to https://my.comma.ai/useradmin and click on your dongle id. The ids under `route_name` is what you want to paste here.
+            To get a list of drives, go to https://my.comma.ai/useradmin and click on your dongle id.
+                The ids under `route_name` is what you want to paste here.
         """
 
         self.new_data_folder = 'new_data'
