@@ -40,7 +40,7 @@ def freeze_session(session, keep_var_names=None, output_names=None, clear_device
         return frozen_graph
 
 K.set_learning_phase(0)
-model_name = "traffic_best"
+model_name = "small"
 
 use_keras = True
 if use_keras:

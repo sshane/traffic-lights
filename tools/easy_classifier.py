@@ -27,7 +27,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.skip = 0
         self.user_skip = 0
 
-        self.model_name = 'high_acc_low_size'
+        self.model_name = 'newesthaha'
         self.model = keras.models.load_model('models/h5_models/{}.h5'.format(self.model_name))
 
         self.make_dirs()
