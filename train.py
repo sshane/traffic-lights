@@ -178,17 +178,17 @@ class TrafficLightsModel:
         self.eta_tool = ETATool()
         # self.W, self.H = 1164, 874
         self.y_hood_crop = 665  # pixels from top where to crop image to get rid of hood.
-        self.cropped_shape = (665, 814, 3)
+        self.cropped_shape = (665, 814, 3)  # (515, 814, 3)
         self.labels = ['RED', 'GREEN', 'YELLOW', 'NONE']
         self.proc_folder = 'data/.processed'
 
         # self.reduction = 2
-        self.batch_size = 16
+        self.batch_size = 32
         self.test_percentage = 0.2  # percentage of total data to be validated on
         self.num_flow_images = 3  # number of extra images to randomly generate per each input image
-        self.dataloader_workers = 15  # used by keras to load input images, there is diminishing returns at high values (>~10)
+        self.dataloader_workers = 14  # used by keras to load input images, there is diminishing returns at high values (>~10)
 
-        self.limit_samples = 1800
+        self.limit_samples = 2800
 
         self.model = None
 
@@ -236,25 +236,31 @@ class TrafficLightsModel:
                                  class_weight=self.class_weight)
 
     def get_model(self):
-        kernel_size = (2, 2)  # (3, 3)
+        # model = Sequential()
+        # model.add(Dense(64, activation='relu', input_shape=(np.product(self.cropped_shape),)))
+        # model.add(Dense(32, activation='relu'))
+        # model.add(Dense(32, activation='relu'))
+        # model.add(Dense(4, activation='softmax'))
+        # return model
+
+        kernel_size = (3, 3)  # (3, 3)
 
         model = Sequential()
         model.add(Conv2D(12, kernel_size, activation='relu', input_shape=self.cropped_shape))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(MaxPooling2D(pool_size=(3, 3)))
         # model.add(BatchNormalization())
 
         model.add(Conv2D(12, kernel_size, activation='relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-
-        model.add(Conv2D(24, kernel_size, activation='relu'))
         model.add(MaxPooling2D(pool_size=(3, 3)))
 
-        model.add(Conv2D(36, kernel_size, activation='relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(Conv2D(16, kernel_size, activation='relu'))
+        model.add(MaxPooling2D(pool_size=(3, 3)))
+
+        model.add(Conv2D(32, kernel_size, activation='relu'))
 
 
         model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
-        model.add(Dense(64, activation='relu'))
+        model.add(Dense(32, activation='relu'))
         # model.add(Dropout(0.3))
         model.add(Dense(32, activation='relu'))
         # model.add(Dropout(0.3))
