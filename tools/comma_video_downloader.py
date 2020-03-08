@@ -6,7 +6,7 @@ import time
 from threading import Thread
 
 
-# BASEDIR = "C:/your_main_folder"  # uncomment and fill these variables if you haven't cloned the entire traffic-lights repo. comment the related imports above
+# BASEDIR = "C:/your_main_folder"  # uncomment and fill these variables if you haven't cloned the entire traffic-lights repo.
 # JWT = "your_JWT_key"  # then comment the above imports for BASEDIR and JWT
 
 os.chdir(BASEDIR)
