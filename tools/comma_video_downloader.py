@@ -7,8 +7,8 @@ try:
     from utils.JWT import JWT
     from utils.basedir import BASEDIR
 except ImportError:
-    BASEDIR = "C:/your_main_folder"
-    JWT = "your_JWT_key"
+    BASEDIR = "C:/your_main_folder"  # any empty folder on your system
+    JWT = "your_JWT_key"  # get your JWT from https://jwt.comma.ai/
     if BASEDIR == "C:/your_main_folder" or JWT == "your_JWT_key":
         raise Exception('Please fill in the BASEDIR and JWT variables at the top of this file.')
 
