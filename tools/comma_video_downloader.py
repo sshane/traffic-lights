@@ -1,13 +1,17 @@
 import requests
-from utils.JWT import JWT
-from utils.basedir import BASEDIR
 import os
 import time
 from threading import Thread
 
+try:
+    from utils.JWT import JWT
+    from utils.basedir import BASEDIR
+except ImportError:
+    BASEDIR = "C:/your_main_folder"
+    JWT = "your_JWT_key"
+    if BASEDIR == "C:/your_main_folder" or JWT == "your_JWT_key":
+        raise Exception('Please fill in the BASEDIR and JWT variables at the top of this file.')
 
-# BASEDIR = "C:/your_main_folder"  # uncomment and fill these variables if you haven't cloned the entire traffic-lights repo.
-# JWT = "your_JWT_key"  # then comment the above imports for BASEDIR and JWT
 
 os.chdir(BASEDIR)
 
