@@ -5,10 +5,11 @@ import os
 import time
 from threading import Thread
 
-os.chdir(BASEDIR)
 
 # BASEDIR = "C:/your_main_folder"  # uncomment and fill these variables if you haven't cloned the entire traffic-lights repo. comment the related imports above
-# JWT = "your_JWT_key"
+# JWT = "your_JWT_key"  # then comment the above imports for BASEDIR and JWT
+
+os.chdir(BASEDIR)
 
 
 class CommaVideoDownloader:
