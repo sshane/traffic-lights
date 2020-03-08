@@ -12,7 +12,7 @@ done_dir = '{}/done'.format(BASEDIR)
 os.chdir(BASEDIR)
 
 num_threads = 0
-max_threads = 10
+max_threads = 12
 valid_extension = '.hevc'
 working_file = '{}/delete_to_stop'.format(BASEDIR)  # delete this file to stop extraction process after current video is done
 

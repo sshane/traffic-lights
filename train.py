@@ -188,7 +188,7 @@ class TrafficLightsModel:
         self.num_flow_images = 3  # number of extra images to randomly generate per each input image
         self.dataloader_workers = 14  # used by keras to load input images, there is diminishing returns at high values (>~10)
 
-        self.limit_samples = 2800
+        self.limit_samples = 3000
 
         self.model = None
 

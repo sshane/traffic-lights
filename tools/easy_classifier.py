@@ -34,7 +34,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.show_imgs()
 
     def show_imgs(self):
-        for route in [i for i in self.routes if 'already_classified' not in i]:
+        for route in [i for i in self.routes if i not in ['already_classified', 'todo']]:
             route_dir = '{}/{}'.format(self.extracted_dir, route)
             list_dir = self.sort_list_dir(os.listdir(route_dir))  # sorted using integar values of frame idx
             print('Route: {}'.format(route))
