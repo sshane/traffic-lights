@@ -27,7 +27,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.skip = 0
         self.user_skip = 0
 
-        self.model_name = 'newesthaha'
+        self.model_name = 'traffic_2_class_95_val_acc'
         self.model = keras.models.load_model('models/h5_models/{}.h5'.format(self.model_name))
 
         self.make_dirs()
@@ -41,7 +41,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
             print('Loading all images from route to predict, please wait...', flush=True)
             all_imgs = self.load_imgs_from_directory(list_dir, route_dir)
             print('Loaded all images! Now predicting...', flush=True)
-            predictions = self.predict_multiple(all_imgs)
+            route_predictions = self.predict_multiple(all_imgs)
             del all_imgs  # free unused memory
             print('Valid inputs: [Correct/{class}/skip {num frames}]')
             for idx, img_name in enumerate(list_dir):
@@ -62,7 +62,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
                 plt.clf()
                 plt.imshow(self.crop_image(self.BGR2RGB(img), False))
 
-                pred = predictions[idx]
+                pred = route_predictions[idx]
                 pred_idx = np.argmax(pred)
 
                 plt.title('Prediction: {} ({}%)'.format(self.labels[pred_idx], round(pred[pred_idx] * 100, 2)))
@@ -142,7 +142,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.user_skip = 0
 
     def predict_multiple(self, imgs):
-        imgs_cropped = [self.crop_image(img, True) for img in imgs]
+        imgs_cropped = [self.crop_image(img, False) for img in imgs]
         return self.model.predict(np.array(imgs_cropped))
 
     def crop_image(self, img_array, crop_top):

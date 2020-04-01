@@ -19,7 +19,7 @@ import threading
 import time
 import shutil
 import pickle
-from utils.data_generator import DataGenerator
+from utils.custom_data_generator import CustomDataGenerator
 from utils.eta_tool import ETATool
 from utils.basedir import BASEDIR
 
@@ -41,14 +41,18 @@ def show_preds():
     img = cv2.imread('{}/.validation/{}/{}'.format(traffic.proc_folder, class_choice, img_choice))
     img = (img / 255).astype(np.float32)
 
-    pred = traffic.model.predict(np.array([img]))[0]
-    pred = np.argmax(pred)
+    prediction = traffic.model.predict(np.array([img]))[0]
+    pred = np.argmax(prediction)
 
     plt.clf()
 
     plt.imshow(traffic.BGR2RGB(img))
     plt.show()
-    plt.title('Prediction: {}'.format(traffic.labels[pred]))
+    if traffic.use_new_labels:
+        labels = traffic.new_labels
+    else:
+        labels = traffic.labels
+    plt.title('Prediction: {} ({}%)'.format(traffic.new_labels[pred], round(prediction[pred] * 100, 2)))
     plt.show()
 
 
@@ -180,6 +184,13 @@ class TrafficLightsModel:
         self.y_hood_crop = 665  # pixels from top where to crop image to get rid of hood.
         self.cropped_shape = (665, 814, 3)  # (515, 814, 3)
         self.labels = ['RED', 'GREEN', 'YELLOW', 'NONE']
+
+        self.GO = 'GO'
+        self.SLOW = 'SLOW'
+        self.transform_old_labels = {'RED': self.SLOW, 'GREEN': self.GO, 'YELLOW': self.SLOW, 'NONE': self.GO}
+        self.new_labels = [self.GO, self.SLOW]
+        self.use_new_labels = True
+
         self.proc_folder = 'data/.processed'
 
         # self.reduction = 2
@@ -193,13 +204,11 @@ class TrafficLightsModel:
         self.model = None
 
         self.force_reset = force_reset
-        self.num_train = 0
-        self.num_valid = 0
         self.finished_file = 'data/.finished'
         self.class_weight = {}
 
         self.datagen_threads = 0
-        self.datagen_max_threads = 30  # used to generate randomly transformed data (dependant on your CPU, set lower if it starts to freeze)
+        self.datagen_max_threads = 24  # used to generate randomly transformed data (dependant on your CPU, set lower if it starts to freeze)
 
     def do_init(self):
         self.check_data()
@@ -253,19 +262,21 @@ class TrafficLightsModel:
         model.add(Conv2D(12, kernel_size, activation='relu'))
         model.add(MaxPooling2D(pool_size=(3, 3)))
 
-        model.add(Conv2D(16, kernel_size, activation='relu'))
+        model.add(Conv2D(24, kernel_size, activation='relu'))
         model.add(MaxPooling2D(pool_size=(3, 3)))
 
-        model.add(Conv2D(32, kernel_size, activation='relu'))
+        model.add(Conv2D(36, kernel_size, activation='relu'))
 
 
         model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
         model.add(Dense(32, activation='relu'))
         # model.add(Dropout(0.3))
-        model.add(Dense(32, activation='relu'))
+        model.add(Dense(64, activation='relu'))
         # model.add(Dropout(0.3))
-        model.add(Dense(len(self.labels), activation='softmax'))
-
+        if not self.use_new_labels:
+            model.add(Dense(len(self.labels), activation='softmax'))
+        else:
+            model.add(Dense(len(self.new_labels), activation='softmax'))
         return model
 
     def BGR2RGB(self, arr):  # easier to inference on, EON uses BGR images
@@ -274,8 +285,8 @@ class TrafficLightsModel:
     def get_generators(self):
         train_dir = '{}/.train'.format(self.proc_folder)
         valid_dir = '{}/.validation'.format(self.proc_folder)
-        train_generator = DataGenerator(train_dir, self.labels, self.batch_size)  # keeps data in BGR format and normalizes
-        valid_generator = DataGenerator(valid_dir, self.labels, self.batch_size * 2)
+        train_generator = CustomDataGenerator(train_dir, self.labels, self.new_labels, self.transform_old_labels, self.use_new_labels, self.batch_size)  # keeps data in BGR format and normalizes
+        valid_generator = CustomDataGenerator(valid_dir, self.labels, self.new_labels, self.transform_old_labels, self.use_new_labels, self.batch_size * 2)
         return train_generator, valid_generator
 
     def create_val_images(self):
@@ -369,6 +380,7 @@ class TrafficLightsModel:
 
         print('Randomly transforming and cropping input images, please wait...'.format(len(self.labels)))
         print('Your system may slow until the process completes. Try reducing the max threads if it locks up.')
+        print('Do NOT delete anything in the `.processed` folder while it\'s working.')
         for image_class in self.labels:
             photos = os.listdir('data/{}'.format(image_class))
             random.shuffle(photos)
@@ -394,18 +406,29 @@ class TrafficLightsModel:
             os.mkdir('{}/.validation/{}'.format(self.proc_folder, image_class))
 
     def set_class_weight(self):
-        image_label_nums = {}
-        for label in self.labels:
-            image_label_nums[label] = len(os.listdir('{}/.train/{}'.format(self.proc_folder, label)))
-            # self.num_train += len(os.listdir('{}/.train/{}'.format(self.proc_folder, cls)))
-            # self.num_valid += len(os.listdir('{}/.validation/{}'.format(self.proc_folder, cls)))
-        for label in self.labels:
-            self.class_weight[self.labels.index(label)] = 1 / (image_label_nums[label] / max(image_label_nums.values()))  # get class weight. class with 50 samples and max 100 gets assigned 2.0
-        tmp_prnt = {self.labels[cls]: self.class_weight[cls] for cls in self.class_weight}
+        if not self.use_new_labels:
+            labels = self.labels
+            image_label_nums = {}
+            for label in self.labels:
+                image_label_nums[label] = len(os.listdir('{}/.train/{}'.format(self.proc_folder, label)))
+        else:
+            labels = self.new_labels
+            image_label_nums = {self.SLOW: 0, self.GO: 0}
+            for label in self.labels:
+                new_label = self.transform_old_labels[label]
+                image_label_nums[new_label] += len(os.listdir('{}/.train/{}'.format(self.proc_folder, label)))
+
+        for label in image_label_nums:
+            self.class_weight[labels.index(label)] = 1 / (image_label_nums[label] / max(image_label_nums.values()))  # get class weight. class with 50 samples and max 100 gets assigned 2.0
+
+        tmp_prnt = {labels[cls]: self.class_weight[cls] for cls in self.class_weight}
         print('Class weights: {}'.format(tmp_prnt))
 
     def one_hot(self, idx):
-        one = [0] * len(self.labels)
+        if not self.use_new_labels:
+            one = [0] * len(self.labels)
+        else:
+            one = [0] * len(self.new_labels)
         one[idx] = 1
         return one
 
