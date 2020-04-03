@@ -16,6 +16,7 @@ os.chdir(BASEDIR)
 class EasyClassifier:  # todo: implement smart skip. low skip value when model predicts traffic light, high skip when model predicts none
     def __init__(self):
         self.labels = ['RED', 'GREEN', 'YELLOW', 'NONE']
+        self.new_labels = ['GO', 'SLOW']
         self.data_dir = 'data'
         self.to_add_dir = '{}/to_add'.format(self.data_dir)
         self.extracted_dir = 'new_data/extracted'
@@ -65,15 +66,16 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
                 pred = route_predictions[idx]
                 pred_idx = np.argmax(pred)
 
-                plt.title('Prediction: {} ({}%)'.format(self.labels[pred_idx], round(pred[pred_idx] * 100, 2)))
+                plt.title('Prediction: {} ({}%)'.format(self.new_labels[pred_idx], round(pred[pred_idx] * 100, 2)))
                 plt.pause(0.01)
 
                 output_dict = self.get_true_label(self.labels[pred_idx])
+                print(output_dict)
 
                 if output_dict['skip']:
                     continue
-                elif output_dict['correct']:
-                    self.move(img_path, '{}/{}/{}'.format(self.to_add_dir, self.labels[pred_idx], img_name))
+                # elif output_dict['correct']:
+                #     self.move(img_path, '{}/{}/{}'.format(self.to_add_dir, self.labels[pred_idx], img_name))
                 else:
                     correct_label = output_dict['label']
                     self.move(img_path, '{}/{}/{}'.format(self.to_add_dir, correct_label, img_name))
@@ -106,9 +108,9 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
             elif u_input in labels.values():
                 print('Moved to {} folder!'.format(u_input))
                 return {'label': u_input, 'correct': False, 'skip': False}
-            elif u_input in correct:
-                print('Moved to {} folder!'.format(model_pred))
-                return {'label': model_pred, 'correct': True, 'skip': False}
+            # elif u_input in correct:
+            #     print('Moved to {} folder!'.format(model_pred))
+            #     return {'label': model_pred, 'correct': True, 'skip': False}
             elif 'SKIP' in u_input:
                 u_input = u_input.split(' ')
                 try:

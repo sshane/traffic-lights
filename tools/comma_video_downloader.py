@@ -29,6 +29,7 @@ class CommaVideoDownloader:
         self.new_data_folder = 'new_data'
         self.downloaded_dir = '{}/downloaded'.format(self.new_data_folder)
         self.video_extension = '.hevc'
+        self.route_threads = []
         self.setup_dirs()
         self.api_url = 'https://api.commadotai.com/v1/route/{}/files'
         self.download_loop()
@@ -41,8 +42,15 @@ class CommaVideoDownloader:
             time.sleep(2)
 
     def start_downloader(self, route_name):
+        if route_name not in self.route_threads:
+            self.route_threads.append(route_name)
+        else:
+            print('Thread already downloading route!')
+            return
+
         response = requests.get(self.api_url.format(route_name), headers={'Authorization': 'JWT {}'.format(JWT)})
         if response.status_code != 200:
+            self.route_threads.remove(route_name)
             raise Exception('Returned status code: {}'.format(response.status_code))
 
         response = response.json()
@@ -72,6 +80,8 @@ class CommaVideoDownloader:
                 time.sleep(1)
         else:
             print('No new videos on this route! Please try again or wait until they have uploaded from your EON/C2.')
+
+        self.route_threads.remove(route_name)
 
     def get_name_from_url(self, video_url):
         video_name = video_url.split('_')[-1]
