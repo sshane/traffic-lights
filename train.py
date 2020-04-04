@@ -35,7 +35,7 @@ def get_img_paths(typ, class_choice):
 
 
 def show_preds():
-    class_choice = random.choice(traffic.labels)
+    class_choice = random.choice(traffic.data_labels)
     x_test = get_img_paths('validation', class_choice)
     img_choice = random.choice(x_test)
     img = cv2.imread('{}/.validation/{}/{}'.format(traffic.proc_folder, class_choice, img_choice))
@@ -48,11 +48,11 @@ def show_preds():
 
     plt.imshow(traffic.BGR2RGB(img))
     plt.show()
-    if traffic.use_new_labels:
-        labels = traffic.new_labels
+    if traffic.use_model_labels:
+        labels = traffic.model_labels
     else:
-        labels = traffic.labels
-    plt.title('Prediction: {} ({}%)'.format(traffic.new_labels[pred], round(prediction[pred] * 100, 2)))
+        labels = traffic.data_labels
+    plt.title('Prediction: {} ({}%)'.format(traffic.model_labels[pred], round(prediction[pred] * 100, 2)))
     plt.show()
 
 
@@ -64,7 +64,7 @@ def plot_features(layer_idx, img_class=None, img_idx=None, square=2, filter_idx=
     layer_idx = [idx for idx, layer in enumerate(traffic.model.layers) if layer.name == layers[layer_idx].name][0]
 
     if img_idx is None:
-        class_choice = random.choice(traffic.labels)
+        class_choice = random.choice(traffic.data_labels)
     else:
         class_choice = img_class
     x_test = get_img_paths('validation', class_choice)
@@ -109,7 +109,7 @@ def plot_features_old(layer_idx, square=2, img_class=None, img_idx=None):
     layer_idx = [idx for idx, layer in enumerate(traffic.model.layers) if layer.name == layers[layer_idx].name][0]
 
     if img_idx is None:
-        class_choice = random.choice(traffic.labels)
+        class_choice = random.choice(traffic.data_labels)
     else:
         class_choice = img_class
     x_test = get_img_paths('validation', class_choice)
@@ -183,11 +183,11 @@ class TrafficLightsModel:
         # self.W, self.H = 1164, 874
         self.y_hood_crop = 665  # pixels from top where to crop image to get rid of hood.
         self.cropped_shape = (665, 814, 3)  # (515, 814, 3)
-        self.labels = ['RED', 'GREEN', 'YELLOW', 'NONE']
+        self.data_labels = ['RED', 'GREEN', 'YELLOW', 'NONE']
 
         self.transform_old_labels = {'RED': 'SLOW', 'GREEN': 'GREEN', 'YELLOW': 'SLOW', 'NONE': 'NONE'}
-        self.new_labels = ['SLOW', 'GREEN', 'NONE']
-        self.use_new_labels = True
+        self.model_labels = ['SLOW', 'GREEN', 'NONE']
+        self.use_model_labels = True
 
         self.proc_folder = 'data/.processed'
 
@@ -271,10 +271,10 @@ class TrafficLightsModel:
         # model.add(Dropout(0.3))
         model.add(Dense(64, activation='relu'))
         # model.add(Dropout(0.3))
-        if not self.use_new_labels:
-            model.add(Dense(len(self.labels), activation='softmax'))
+        if not self.use_model_labels:
+            model.add(Dense(len(self.data_labels), activation='softmax'))
         else:
-            model.add(Dense(len(self.new_labels), activation='softmax'))
+            model.add(Dense(len(self.model_labels), activation='softmax'))
         return model
 
     def BGR2RGB(self, arr):  # easier to inference on, EON uses BGR images
@@ -283,14 +283,14 @@ class TrafficLightsModel:
     def get_generators(self):
         train_dir = '{}/.train'.format(self.proc_folder)
         valid_dir = '{}/.validation'.format(self.proc_folder)
-        train_generator = CustomDataGenerator(train_dir, self.labels, self.new_labels, self.transform_old_labels, self.use_new_labels, self.batch_size)  # keeps data in BGR format and normalizes
-        valid_generator = CustomDataGenerator(valid_dir, self.labels, self.new_labels, self.transform_old_labels, self.use_new_labels, self.batch_size * 2)
+        train_generator = CustomDataGenerator(train_dir, self.data_labels, self.model_labels, self.transform_old_labels, self.use_model_labels, self.batch_size)  # keeps data in BGR format and normalizes
+        valid_generator = CustomDataGenerator(valid_dir, self.data_labels, self.model_labels, self.transform_old_labels, self.use_model_labels, self.batch_size * 2)
         return train_generator, valid_generator
 
     def create_val_images(self):
         print('Separating validation images!', flush=True)
         images = []
-        for idx, image_class in enumerate(self.labels):  # load all image names and class
+        for idx, image_class in enumerate(self.data_labels):  # load all image names and class
             class_dir = '{}/{}'.format(self.proc_folder, image_class)
             for image in os.listdir(class_dir):
                 images.append({'path': '{}/{}'.format(class_dir, image), 'class': image_class})
@@ -303,7 +303,7 @@ class TrafficLightsModel:
             img_name = sample['path'].split('/')[-1]
             shutil.move(sample['path'], '{}/.validation/{}/{}'.format(self.proc_folder, sample['class'], img_name))
 
-        for image_class in self.labels:
+        for image_class in self.data_labels:
             io_sleep()
             os.rmdir('{}/{}'.format(self.proc_folder, image_class))  # should be empty, throw error if not
 
@@ -376,10 +376,10 @@ class TrafficLightsModel:
                 horizontal_flip=False,  # todo: testing false
                 fill_mode='nearest')
 
-        print('Randomly transforming and cropping input images, please wait...'.format(len(self.labels)))
+        print('Randomly transforming and cropping input images, please wait...'.format(len(self.data_labels)))
         print('Your system may slow until the process completes. Try reducing the max threads if it locks up.')
         print('Do NOT delete anything in the `.processed` folder while it\'s working.')
-        for image_class in self.labels:
+        for image_class in self.data_labels:
             photos = os.listdir('data/{}'.format(image_class))
             random.shuffle(photos)
 
@@ -398,23 +398,23 @@ class TrafficLightsModel:
         io_sleep()
         os.makedirs('{}/{}'.format(self.proc_folder, '.train'))
         os.mkdir('{}/{}'.format(self.proc_folder, '.validation'))
-        for image_class in self.labels:
+        for image_class in self.data_labels:
             os.mkdir('{}/{}'.format(self.proc_folder, image_class))
             os.mkdir('{}/.train/{}'.format(self.proc_folder, image_class))
             os.mkdir('{}/.validation/{}'.format(self.proc_folder, image_class))
 
     def set_class_weight(self):
-        if not self.use_new_labels:
-            labels = self.labels
+        if not self.use_model_labels:
+            labels = self.data_labels
             label_img_count = {}
-            for label in self.labels:
+            for label in self.data_labels:
                 label_img_count[label] = len(os.listdir('{}/.train/{}'.format(self.proc_folder, label)))
         else:
-            labels = self.new_labels
-            label_img_count = {lbl: 0 for lbl in self.new_labels}
-            for label in self.labels:
-                new_label = self.transform_old_labels[label]
-                label_img_count[new_label] += len(os.listdir('{}/.train/{}'.format(self.proc_folder, label)))
+            labels = self.model_labels
+            label_img_count = {lbl: 0 for lbl in self.model_labels}
+            for label in self.data_labels:
+                model_label = self.transform_old_labels[label]
+                label_img_count[model_label] += len(os.listdir('{}/.train/{}'.format(self.proc_folder, label)))
 
         for label in label_img_count:
             self.class_weight[labels.index(label)] = 1 / (label_img_count[label] / max(label_img_count.values()))  # get class weight. class with 50 samples and max 100 gets assigned 2.0
@@ -423,10 +423,10 @@ class TrafficLightsModel:
         print('Class weights: {}'.format(tmp_prnt))
 
     def one_hot(self, idx):
-        if not self.use_new_labels:
-            one = [0] * len(self.labels)
+        if not self.use_model_labels:
+            one = [0] * len(self.data_labels)
         else:
-            one = [0] * len(self.new_labels)
+            one = [0] * len(self.model_labels)
         one[idx] = 1
         return one
 
@@ -436,7 +436,7 @@ class TrafficLightsModel:
             os.mkdir('data')
             raise Exception('Please unzip the data.zip archive into data directory')
         data_files = os.listdir('data')
-        if not all([i in data_files for i in self.labels]):
+        if not all([i in data_files for i in self.data_labels]):
             raise Exception('Please unzip the data.zip archive into data directory')
 
     @property

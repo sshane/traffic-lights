@@ -6,12 +6,12 @@ import cv2
 
 
 class CustomDataGenerator(keras.utils.Sequence):
-    def __init__(self, directory, labels, new_labels, transform_old_labels, use_new_labels, batch_size, shuffle=True):
+    def __init__(self, directory, data_labels, model_labels, transform_old_labels, use_model_labels, batch_size, shuffle=True):
         self.directory = directory
-        self.labels = labels
-        self.new_labels = new_labels
+        self.data_labels = data_labels
+        self.model_labels = model_labels
         self.transform_old_labels = transform_old_labels
-        self.use_new_labels = use_new_labels
+        self.use_model_labels = use_model_labels
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.image_paths, self.image_labels = self.get_files()
@@ -36,7 +36,7 @@ class CustomDataGenerator(keras.utils.Sequence):
     def get_files(self):
         image_paths = []
         image_labels = []
-        for label in self.labels:
+        for label in self.data_labels:
             label_path = '{}/{}'.format(self.directory, label)
             for img in os.listdir(label_path):
                 image_paths.append('{}/{}'.format(label_path, img))
@@ -60,12 +60,12 @@ class CustomDataGenerator(keras.utils.Sequence):
         return img
 
     def one_hot(self, picked_label):
-        if not self.use_new_labels:
-            one = [0] * len(self.labels)
-            one[self.labels.index(picked_label)] = 1
+        if not self.use_model_labels:
+            one = [0] * len(self.data_labels)
+            one[self.data_labels.index(picked_label)] = 1
         else:
-            one = [0] * len(self.new_labels)
-            new_label = self.transform_old_labels[picked_label]
-            one[self.new_labels.index(new_label)] = 1
+            one = [0] * len(self.model_labels)
+            model_label = self.transform_old_labels[picked_label]
+            one[self.model_labels.index(model_label)] = 1
 
         return one

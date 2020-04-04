@@ -21,8 +21,8 @@ set_session(tf.Session(config=config))
 
 class EasyClassifier:  # todo: implement smart skip. low skip value when model predicts traffic light, high skip when model predicts none
     def __init__(self):
-        self.labels = ['RED', 'GREEN', 'YELLOW', 'NONE']
-        self.new_labels = ['GO', 'SLOW']
+        self.data_labels = ['RED', 'GREEN', 'YELLOW', 'NONE']
+        self.model_labels = ['SLOW', 'GREEN', 'NONE']
         self.data_dir = 'data'
         self.to_add_dir = '{}/to_add'.format(self.data_dir)
         self.extracted_dir = 'new_data/extracted'
@@ -34,7 +34,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.skip = 0
         self.user_skip = 0
 
-        self.model_name = 'traffic_2_class_95_val_acc'
+        self.model_name = '3_class_test'
         self.model = keras.models.load_model('models/h5_models/{}.h5'.format(self.model_name))
 
         self.make_dirs()
@@ -72,10 +72,10 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
                 pred = route_predictions[idx]
                 pred_idx = np.argmax(pred)
 
-                plt.title('Prediction: {} ({}%)'.format(self.new_labels[pred_idx], round(pred[pred_idx] * 100, 2)))
+                plt.title('Prediction: {} ({}%)'.format(self.model_labels[pred_idx], round(pred[pred_idx] * 100, 2)))
                 plt.pause(0.01)
 
-                output_dict = self.get_true_label(self.labels[pred_idx])
+                output_dict = self.get_true_label(self.data_labels[pred_idx])
                 print(output_dict)
 
                 if output_dict['skip']:
@@ -167,7 +167,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
 
     def make_dirs(self):
         try:
-            for lbl in self.labels:
+            for lbl in self.data_labels:
                 os.makedirs('{}/{}'.format(self.to_add_dir, lbl))
         except:
             pass
