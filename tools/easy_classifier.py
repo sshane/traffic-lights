@@ -47,45 +47,47 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
             print('Route: {}'.format(route))
             print('Loading all images from route to predict, please wait...', flush=True)
             all_imgs = self.load_imgs_from_directory(list_dir, route_dir)
-            print('Loaded all images! Now predicting...', flush=True)
-            route_predictions = self.predict_multiple(all_imgs)
-            del all_imgs  # free unused memory
-            print('Valid inputs: [Correct/{class}/skip {num frames}]')
-            for idx, img_name in enumerate(list_dir):
-                if self.skip != 0 and self.user_skip == 0:  # this skips ahead in time
-                    self.skip -= 1
-                    continue
-                else:
-                    self.skip = int(self.default_skip)
+            if len(all_imgs) != 0:  # nothing here, bad files
+                print('Loaded all images! Now predicting...', flush=True)
+                route_predictions = self.predict_multiple(all_imgs)
+                del all_imgs  # free unused memory
+                print('Valid inputs: [Correct/{class}/skip {num frames}]')
+                for idx, img_name in enumerate(list_dir):
+                    if self.skip != 0 and self.user_skip == 0:  # this skips ahead in time
+                        self.skip -= 1
+                        continue
+                    else:
+                        self.skip = int(self.default_skip)
 
-                if self.user_skip != 0:
-                    self.user_skip -= 1
-                    continue
-                print('At frame: {}'.format(idx))
+                    if self.user_skip != 0:
+                        self.user_skip -= 1
+                        continue
+                    print('At frame: {}'.format(idx))
 
-                img_path = '{}/{}'.format(route_dir, img_name)
+                    img_path = '{}/{}'.format(route_dir, img_name)
 
-                img = cv2.imread(img_path)
-                plt.clf()
-                plt.imshow(self.crop_image(self.BGR2RGB(img), False))
+                    img = cv2.imread(img_path)
+                    plt.clf()
+                    plt.imshow(self.crop_image(self.BGR2RGB(img), False))
+                    plt.ion()
 
-                pred = route_predictions[idx]
-                pred_idx = np.argmax(pred)
+                    pred = route_predictions[idx]
+                    pred_idx = np.argmax(pred)
 
-                plt.title('Prediction: {} ({}%)'.format(self.model_labels[pred_idx], round(pred[pred_idx] * 100, 2)))
-                plt.pause(0.01)
+                    plt.title('Prediction: {} ({}%)'.format(self.model_labels[pred_idx], round(pred[pred_idx] * 100, 2)))
+                    plt.pause(0.01)
 
-                output_dict = self.get_true_label(self.data_labels[pred_idx])
-                print(output_dict)
+                    output_dict = self.get_true_label(self.data_labels[pred_idx])
 
-                if output_dict['skip']:
-                    continue
-                # elif output_dict['correct']:
-                #     self.move(img_path, '{}/{}/{}'.format(self.to_add_dir, self.data_labels[pred_idx], img_name))
-                else:
-                    correct_label = output_dict['label']
-                    self.move(img_path, '{}/{}/{}'.format(self.to_add_dir, correct_label, img_name))
-
+                    if output_dict['skip']:
+                        continue
+                    # elif output_dict['correct']:
+                    #     self.move(img_path, '{}/{}/{}'.format(self.to_add_dir, self.data_labels[pred_idx], img_name))
+                    else:
+                        correct_label = output_dict['label']
+                        self.move(img_path, '{}/{}/{}'.format(self.to_add_dir, correct_label, img_name))
+            else:
+                print('Skipping bad folder...')
             self.reset_skip()
             self.move_folder(route_dir, self.already_classified_dir)
             print('Next video!')
@@ -98,8 +100,10 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         imgs = []
         for img_name in list_dir:
             img_path = '{}/{}'.format(route_dir, img_name)
-            img = np.array((cv2.imread(img_path) / 255.0), dtype=np.float32)
-            imgs.append(img)
+            img = cv2.imread(img_path)
+            if img is None:  # skips bad files
+                continue
+            imgs.append(np.array((img / 255.0), dtype=np.float32))
         return imgs
 
     def get_true_label(self, model_pred):
