@@ -1,3 +1,5 @@
+from keras.backend.tensorflow_backend import set_session
+import tensorflow as tf
 import os
 import cv2
 import random
@@ -11,6 +13,10 @@ import numpy as np
 import shutil
 
 os.chdir(BASEDIR)
+
+config = tf.ConfigProto()
+config.gpu_options.per_process_gpu_memory_fraction = 0.25
+set_session(tf.Session(config=config))
 
 
 class EasyClassifier:  # todo: implement smart skip. low skip value when model predicts traffic light, high skip when model predicts none
