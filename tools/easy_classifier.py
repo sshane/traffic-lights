@@ -15,7 +15,7 @@ import shutil
 os.chdir(BASEDIR)
 
 config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.25
+config.gpu_options.per_process_gpu_memory_fraction = 0.4
 set_session(tf.Session(config=config))
 
 
@@ -34,7 +34,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.skip = 0
         self.user_skip = 0
 
-        self.model_name = '3_class_test'
+        self.model_name = 'latest_3_class_93_val_acc'
         self.model = keras.models.load_model('models/h5_models/{}.h5'.format(self.model_name))
 
         self.make_dirs()
@@ -81,7 +81,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
                 if output_dict['skip']:
                     continue
                 # elif output_dict['correct']:
-                #     self.move(img_path, '{}/{}/{}'.format(self.to_add_dir, self.labels[pred_idx], img_name))
+                #     self.move(img_path, '{}/{}/{}'.format(self.to_add_dir, self.data_labels[pred_idx], img_name))
                 else:
                     correct_label = output_dict['label']
                     self.move(img_path, '{}/{}/{}'.format(self.to_add_dir, correct_label, img_name))
