@@ -79,7 +79,7 @@ class CommaVideoDownloader:
                 successful_get = True
                 break
             elif response.status_code == 429:
-                # print('Too many requests, backing off and trying again (try: {})!'.format(i + 1))
+                print('Too many requests, backing off and trying again (try: {} of 5)!'.format(i + 1))
                 time.sleep(sleep_time)
                 sleep_time **= 1.15
             else:
