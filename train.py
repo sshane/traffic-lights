@@ -11,8 +11,6 @@ from keras.models import Model
 from keras.models import Sequential
 from keras.layers import Conv2D, MaxPooling2D, BatchNormalization
 from keras.layers import Activation, Dropout, Flatten, Dense
-import matplotlib
-matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 import numpy as np
@@ -26,9 +24,9 @@ from utils.eta_tool import ETATool
 from utils.basedir import BASEDIR
 
 
-# config = tf.ConfigProto()
-# config.gpu_options.per_process_gpu_memory_fraction = 0.25
-# set_session(tf.Session(config=config))
+config = tf.ConfigProto()
+config.gpu_options.per_process_gpu_memory_fraction = 0.4
+set_session(tf.Session(config=config))
 
 os.chdir(BASEDIR)
 
@@ -187,10 +185,8 @@ class TrafficLightsModel:
         self.cropped_shape = (665, 814, 3)  # (515, 814, 3)
         self.labels = ['RED', 'GREEN', 'YELLOW', 'NONE']
 
-        self.GO = 'GO'
-        self.SLOW = 'SLOW'
-        self.transform_old_labels = {'RED': self.SLOW, 'GREEN': self.GO, 'YELLOW': self.SLOW, 'NONE': self.GO}
-        self.new_labels = [self.GO, self.SLOW]
+        self.transform_old_labels = {'RED': 'SLOW', 'GREEN': 'GREEN', 'YELLOW': 'SLOW', 'NONE': 'NONE'}
+        self.new_labels = ['SLOW', 'GREEN', 'NONE']
         self.use_new_labels = True
 
         self.proc_folder = 'data/.processed'
@@ -410,18 +406,18 @@ class TrafficLightsModel:
     def set_class_weight(self):
         if not self.use_new_labels:
             labels = self.labels
-            image_label_nums = {}
+            label_img_count = {}
             for label in self.labels:
-                image_label_nums[label] = len(os.listdir('{}/.train/{}'.format(self.proc_folder, label)))
+                label_img_count[label] = len(os.listdir('{}/.train/{}'.format(self.proc_folder, label)))
         else:
             labels = self.new_labels
-            image_label_nums = {self.SLOW: 0, self.GO: 0}
+            label_img_count = {lbl: 0 for lbl in self.new_labels}
             for label in self.labels:
                 new_label = self.transform_old_labels[label]
-                image_label_nums[new_label] += len(os.listdir('{}/.train/{}'.format(self.proc_folder, label)))
+                label_img_count[new_label] += len(os.listdir('{}/.train/{}'.format(self.proc_folder, label)))
 
-        for label in image_label_nums:
-            self.class_weight[labels.index(label)] = 1 / (image_label_nums[label] / max(image_label_nums.values()))  # get class weight. class with 50 samples and max 100 gets assigned 2.0
+        for label in label_img_count:
+            self.class_weight[labels.index(label)] = 1 / (label_img_count[label] / max(label_img_count.values()))  # get class weight. class with 50 samples and max 100 gets assigned 2.0
 
         tmp_prnt = {labels[cls]: self.class_weight[cls] for cls in self.class_weight}
         print('Class weights: {}'.format(tmp_prnt))
