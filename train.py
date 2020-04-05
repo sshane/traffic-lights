@@ -197,7 +197,7 @@ class TrafficLightsModel:
         self.num_flow_images = 3  # number of extra images to randomly generate per each input image
         self.dataloader_workers = 14  # used by keras to load input images, there is diminishing returns at high values (>~10)
 
-        self.limit_samples = 3000
+        self.limit_samples = 5500  # only is used to create transformed data
 
         self.model = None
 
@@ -358,11 +358,11 @@ class TrafficLightsModel:
             print('WARNING: RESETTING PROCESSED DATA!', flush=True)
             print('This means all randomly transformed images will be erased and regenerated. Which may take some time depending on the amount of data you have.', flush=True)
             time.sleep(2)
-            for i in range(8):
-                sec = 8 - i
+            for i in range(10):
+                sec = 10 - i
                 multi = 's' if sec > 1 else ''  # gotta be grammatically correcet
                 print('Resetting data in {} second{}!'.format(sec, multi))
-                time.sleep(1.2)
+                time.sleep(1)
             print('RESETTING DATA NOW', flush=True)
 
     def crop_image(self, img_array):
