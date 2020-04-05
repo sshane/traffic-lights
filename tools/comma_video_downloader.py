@@ -27,7 +27,8 @@ class CommaVideoDownloader:
         self.downloaded_dir = '{}/downloaded'.format(self.new_data_folder)
         self.video_extension = '.hevc'
         self.route_threads = []
-        self.max_concurrent_downloads = 5
+        self.max_concurrent_downloads = 3
+        self.max_retries = 6
         self.setup_dirs()
         self.base_api_url = 'https://api.commadotai.com/v1/{}'
 
@@ -50,74 +51,84 @@ class CommaVideoDownloader:
 
         while len(routes) > 0:
             if len(self.route_threads) < self.max_concurrent_downloads:
-                print('Starting download of route: {}'.format(routes[0]), flush=True)
+                print('\nStarting download of route: {}'.format(routes[0]), flush=True)
                 Thread(target=self.start_downloader, args=(routes[0],)).start()
                 del routes[0]
                 time.sleep(2)
             else:
                 time.sleep(5)
-            print('Currently downloading {} routes ({} left)...'.format(len(self.route_threads), len(routes)))
+            print('\nCurrently downloading {} routes ({} left)...'.format(len(self.route_threads), len(routes)))
 
         while len(self.route_threads) > 0:
-            print('Waiting for last few routes to finish downloading...')
+            print('\nFinishing download of {} routes...'.format(len(self.route_threads)))
             time.sleep(5)
         print('Finished downloading all available routes for this dongle!')
 
 
     def start_downloader(self, route_name):
-        if route_name not in self.route_threads:
-            self.route_threads.append(route_name)
-        else:
-            print('Thread already downloading route!')
-            return
-
-        sleep_time = 10
-        successful_get = False
-        for i in range(5):
-            response = requests.get(self.base_api_url.format('route/{}/files').format(route_name), headers={'Authorization': 'JWT {}'.format(JWT)})
-            if response.status_code == 200:
-                successful_get = True
-                break
-            elif response.status_code == 429:
-                print('Too many requests, backing off and trying again (try: {} of 5)!'.format(i + 1))
-                time.sleep(sleep_time)
-                sleep_time **= 1.15
+        try:
+            if route_name not in self.route_threads:
+                self.route_threads.append(route_name)
             else:
-                print('{}: Unknown error!'.format(route_name))
-                break
+                print('Thread already downloading route!')
+                return
 
-        if not successful_get:
+            sleep_time = 10
+            successful_get = False
+            for i in range(self.max_retries):
+                response = requests.get(self.base_api_url.format('route/{}/files').format(route_name), headers={'Authorization': 'JWT {}'.format(JWT)})
+                if response.status_code == 200:
+                    successful_get = True
+                    break
+                elif response.status_code == 429:
+                    print('Too many requests, backing off and trying again (try: {} of {})!'.format(i + 1, self.max_retries))
+                    time.sleep(sleep_time)
+                    sleep_time = min(sleep_time ** 1.2, 120)
+                else:
+                    print('{}: Unknown error!'.format(route_name))
+                    break
+
+            if not successful_get:
+                self.route_threads.remove(route_name)
+                print('{}: Returned status code: {}'.format(route_name, response.status_code))
+                return
+
+
+            response = response.json()
+            video_urls = response['cameras']
+            if len(video_urls) == 0:
+                print('Skipping empty route!')
+                self.route_threads.remove(route_name)
+                return
+            route_folder = self.get_name_from_url(video_urls[0])[1]
+            self.make_dirs('{}/{}'.format(self.downloaded_dir, route_folder))
+
+            for idx, video_url in enumerate(video_urls):
+                # print('Downloading video {} of {}...'.format(idx + 1, len(video_urls)), flush=True)
+                video_name = self.get_name_from_url(video_url)[0]
+
+                video_save_path = '{}/{}/{}'.format(self.downloaded_dir, route_folder, video_name)
+                if os.path.exists(video_save_path):
+                    # print('Video already downloaded: {}, skipping...'.format(video_name))
+                    continue
+
+                video = requests.get(video_url)  # don't download until we check if video already exists
+
+                with open(video_save_path, 'wb') as f:
+                    f.write(video.content)
+                if idx + 1 == len(video_urls):
+                    print('Successfully downloaded {} videos!'.format(len(video_urls)))
+                    break
+                else:
+                    time.sleep(1)
+            else:
+                print('No new videos on this route! Please try again or wait until they have uploaded from your EON/C2.')
+        except Exception as e:
+            print('Error in video downloader!')
+            print('Exception: {}'.format(e))
+
+        if route_name in self.route_threads:
             self.route_threads.remove(route_name)
-            raise Exception('{}: Returned status code: {}'.format(route_name, response.status_code))
-
-
-        response = response.json()
-        video_urls = response['cameras']
-        route_folder = self.get_name_from_url(video_urls[0])[1]
-        self.make_dirs('{}/{}'.format(self.downloaded_dir, route_folder))
-
-        for idx, video_url in enumerate(video_urls):
-            # print('Downloading video {} of {}...'.format(idx + 1, len(video_urls)), flush=True)
-            video_name = self.get_name_from_url(video_url)[0]
-
-            video_save_path = '{}/{}/{}'.format(self.downloaded_dir, route_folder, video_name)
-            if os.path.exists(video_save_path):
-                # print('Video already downloaded: {}, skipping...'.format(video_name))
-                continue
-
-            video = requests.get(video_url)  # don't download until we check if video already exists
-
-            with open(video_save_path, 'wb') as f:
-                f.write(video.content)
-            if idx + 1 == len(video_urls):
-                print('Successfully downloaded {} videos!'.format(len(video_urls)))
-                break
-            else:
-                time.sleep(1)
-        else:
-            print('No new videos on this route! Please try again or wait until they have uploaded from your EON/C2.')
-
-        self.route_threads.remove(route_name)
 
     def get_name_from_url(self, video_url):
         video_name = video_url.split('_')[-1]

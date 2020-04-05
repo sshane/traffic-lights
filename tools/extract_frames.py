@@ -12,7 +12,7 @@ done_dir = '{}/done'.format(BASEDIR)
 os.chdir(BASEDIR)
 
 num_threads = 0
-max_threads = 12
+max_threads = 8
 valid_extension = '.hevc'
 working_file = '{}/delete_to_stop'.format(BASEDIR)  # delete this file to stop extraction process after current video is done
 
@@ -45,7 +45,7 @@ def stop_working():
 def wait_for_threads():
     global num_threads
     while num_threads >= max_threads:
-        time.sleep(1 / max_threads)
+        time.sleep(1 / max_threads + 1)
 
 
 def rm_video(path, name):

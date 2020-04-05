@@ -39,7 +39,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.model = keras.models.load_model('models/h5_models/{}.h5'.format(self.model_name))
         self.graph = tf.get_default_graph()
 
-        self.max_preloaded_routes = 1  # number of routes to preload (set to 0 if your system locks up or runs out of memory, barely works with 32GB)
+        self.max_preloaded_routes = 5  # number of routes to preload (set to 0 if your system locks up or runs out of memory, barely works with 32GB)
         self.preloaded_routes = []
         self.all_routes_done = False
         self.lock = Lock()
@@ -63,6 +63,8 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
                 with self.lock:
                     del self.preloaded_routes[0]
                 self.start_classifying(this_route)
+                if len(self.preloaded_routes) > 0:
+                    print('Preloaded routes: {}'.format(len(self.preloaded_routes)))
                 print('NEXT ROUTE!')
             elif self.all_routes_done and len(self.preloaded_routes) == 0:
                 print('All routes classified!')
