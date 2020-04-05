@@ -53,8 +53,8 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
     def classifier_manager(self):
         print('-----\n  Valid inputs:')
         print('  `{class}` - Move image to class folder')
-        print('  `skip {num frames}` - Set the number of frames to skip')
-        print('  `skip {num frames} now` - Skip n frames now')
+        print('  `skip {num frames}` - Set the number of seconds to skip')
+        print('  `skip {num frames} now` - Skip n seconds now')
         print('  `next route` - Skip to next route')
         print('-----')
         while True:
