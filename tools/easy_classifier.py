@@ -70,9 +70,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
 
     def route_preloader(self):
         for route in self.routes:
-            print('FUTURE ROUTES: {}'.format(len(self.preloaded_routes)))
             while len(self.preloaded_routes) >= self.max_preloaded_routes:
-                print('FUTURE ROUTES: {}'.format(len(self.preloaded_routes)))
                 time.sleep(1)  # too many preloaded, wait until user is done with preloaded routes
 
             route_dir = '{}/{}'.format(self.extracted_dir, route)
