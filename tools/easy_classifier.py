@@ -131,6 +131,8 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
             elif user_out.next_route:
                 print('Skipping to next route!')
                 break
+            else:
+                raise Exception('Unknown command! We shouldn\'t be here...')
 
         self.reset_skip()
         self.move_folder(route['route_dir'], self.already_classified_dir)
