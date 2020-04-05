@@ -52,16 +52,18 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
 
     def classifier_manager(self):
         print('-----\n  Valid inputs:')
-        print('  {class} - Move image to class folder')
-        print('  skip {num frames} - Set the number of frames to skip')
-        print('  skip {num frames} now - Skip n frames now\n-----')
+        print('  `{class}` - Move image to class folder')
+        print('  `skip {num frames}` - Set the number of frames to skip')
+        print('  `skip {num frames} now` - Skip n frames now')
+        print('  `next route` - Skip to next route')
+        print('-----')
         while True:
             if len(self.preloaded_routes) > 0:
-                print('NEXT ROUTE!')
                 this_route = self.preloaded_routes[0]
                 with self.lock:
                     del self.preloaded_routes[0]
                 self.start_classifying(this_route)
+                print('NEXT ROUTE!')
             elif self.all_routes_done and len(self.preloaded_routes) == 0:
                 print('All routes classified!')
                 return
@@ -73,7 +75,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
             route_dir = '{}/{}'.format(self.extracted_dir, route)
             list_dir = self.sort_list_dir(os.listdir(route_dir))  # sorted using integar values of frame idx
             print('Route: {}'.format(route))
-            print('Loading all images from route to predict, please wait...', flush=True)
+            print('Loading all images from route to show predictions, please wait...', flush=True)
             all_imgs = self.load_imgs_from_directory(list_dir, route_dir)
             if len(all_imgs) > 0:
                 print('Loaded all images! Now predicting...', flush=True)
@@ -119,12 +121,16 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
             plt.title('Prediction: {} ({}%)'.format(self.model_labels[pred_idx], round(pred[pred_idx] * 100, 2)))
             plt.pause(0.01)
 
-            output_dict = self.get_true_label(self.data_labels[pred_idx])
-            if output_dict['skip']:
+            user_out = self.get_true_label(self.data_labels[pred_idx])
+            if user_out.skip:
                 continue
-            else:
-                correct_label = output_dict['label']
+            elif user_out.label is not None:
+                correct_label = user_out.label
+                print('Moved to {} folder!'.format(correct_label))
                 self.move(img_path, '{}/{}/{}'.format(self.to_add_dir, correct_label, img_name))
+            elif user_out.next_route:
+                print('Skipping to next route!')
+                break
 
         self.reset_skip()
         self.move_folder(route['route_dir'], self.already_classified_dir)
@@ -144,16 +150,22 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         return imgs
 
     def get_true_label(self, model_pred):
-        labels = {'R': 'RED', 'G': 'GREEN', 'N': 'NONE', 'Y': 'YELLOW'}
+        class ReturnClass:
+            label = None
+            skip = False
+            next_route = False
+
+        return_class = ReturnClass()
+        labels = {lbl[0]: lbl for lbl in self.data_labels}
 
         while True:
             u_input = input('> ').strip(' ').upper()
             if u_input in labels:
-                print('Moved to {} folder!'.format(labels[u_input]))
-                return {'label': labels[u_input], 'correct': False, 'skip': False}
+                return_class.label = labels[u_input]
+                break
             elif u_input in labels.values():
-                print('Moved to {} folder!'.format(u_input))
-                return {'label': u_input, 'correct': False, 'skip': False}
+                return_class.label = u_input
+                break
             elif 'SKIP' in u_input:
                 u_input = u_input.split(' ')
                 try:
@@ -163,7 +175,8 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
                             self.user_skip = max(int(skip_parsed * self.frame_rate), 0)
                             self.skip = 0
                             print('Skipping {} frames!'.format(self.user_skip))
-                            return {'label': None, 'correct': None, 'skip': True}
+                            return_class.skip = True
+                            break
                     elif len(u_input) == 2:  # else set default skip
                         self.default_skip = max(int(skip_parsed * self.frame_rate), 0)
                         self.skip = int(self.default_skip)
@@ -173,7 +186,11 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
                 except:
                     print('Exception when parsing input to skip, try again!')
                     continue
+            elif 'NEXT ROUTE' in u_input:
+                return_class.next_route = True
+                break
             print('Invalid input, try again!')
+        return return_class
 
     def move_folder(self, source, destination):
         shutil.move(source, destination)
