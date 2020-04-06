@@ -2,6 +2,7 @@ import requests
 import os
 import time
 from threading import Thread
+import json
 
 try:
     from utils.JWT import JWT
@@ -25,6 +26,7 @@ class CommaVideoDownloader:
 
         self.new_data_folder = 'new_data'
         self.downloaded_dir = '{}/downloaded'.format(self.new_data_folder)
+        self.download_db_file = '{}/downloaded/downloaded.json'.format(self.new_data_folder)
         self.video_extension = '.hevc'
         self.route_threads = []
         self.max_concurrent_downloads = 3
@@ -32,6 +34,7 @@ class CommaVideoDownloader:
         self.setup_dirs()
         self.base_api_url = 'https://api.commadotai.com/v1/{}'
 
+        self.setup_db()
         self.start()
 
     def start(self):
@@ -52,7 +55,7 @@ class CommaVideoDownloader:
         while len(routes) > 0:
             if len(self.route_threads) < self.max_concurrent_downloads:
                 print('\nStarting download of route: {}'.format(routes[0]), flush=True)
-                Thread(target=self.start_downloader, args=(routes[0],)).start()
+                Thread(target=self.start_downloader, args=(routes[0], dongle_id)).start()
                 del routes[0]
                 time.sleep(2)
             else:
@@ -65,7 +68,7 @@ class CommaVideoDownloader:
         print('Finished downloading all available routes for this dongle!')
 
 
-    def start_downloader(self, route_name):
+    def start_downloader(self, route_name, dongle_id):
         try:
             if route_name not in self.route_threads:
                 self.route_threads.append(route_name)
@@ -100,22 +103,25 @@ class CommaVideoDownloader:
                 print('Skipping empty route!')
                 self.route_threads.remove(route_name)
                 return
-            route_folder = self.get_name_from_url(video_urls[0])[1]
+            route_folder = dongle_id + '_' + self.get_name_from_url(video_urls[0])[1]
             self.make_dirs('{}/{}'.format(self.downloaded_dir, route_folder))
 
             for idx, video_url in enumerate(video_urls):
                 # print('Downloading video {} of {}...'.format(idx + 1, len(video_urls)), flush=True)
-                video_name = self.get_name_from_url(video_url)[0]
-
+                video_name = dongle_id + '_' + self.get_name_from_url(video_url)[0]
                 video_save_path = '{}/{}/{}'.format(self.downloaded_dir, route_folder, video_name)
-                if os.path.exists(video_save_path):
+
+                if os.path.exists(video_save_path) or self.has_been_downloaded(dongle_id, video_name):
                     # print('Video already downloaded: {}, skipping...'.format(video_name))
+                    self.update_db(dongle_id, video_name)  # add downloaded videos to db if not in db
                     continue
 
-                video = requests.get(video_url)  # don't download until we check if video already exists
+                video = requests.get(video_url)
 
                 with open(video_save_path, 'wb') as f:
                     f.write(video.content)
+                self.update_db(dongle_id, video_name)
+
                 if idx + 1 == len(video_urls):
                     print('Successfully downloaded {} videos!'.format(len(video_urls)))
                     break
@@ -129,6 +135,28 @@ class CommaVideoDownloader:
 
         if route_name in self.route_threads:
             self.route_threads.remove(route_name)
+
+    def setup_db(self):
+        if not os.path.exists(self.download_db_file):
+            with open(self.download_db_file, 'w') as f:
+                json.dump({}, f)
+
+    def has_been_downloaded(self, dongle_id, video_name):
+        with open(self.download_db_file, 'r') as f:
+            downloads = json.load(f)
+        return dongle_id in downloads and video_name in downloads[dongle_id]
+
+    def update_db(self, dongle_id, video_name):
+        with open(self.download_db_file, 'r') as f:
+            downloads = json.load(f)
+
+        if dongle_id not in downloads:
+            downloads[dongle_id] = []
+        if video_name not in downloads[dongle_id]:
+            downloads[dongle_id].append(video_name)
+
+        with open(self.download_db_file, 'w') as f:
+            json.dump(downloads, f, indent=True)
 
     def get_name_from_url(self, video_url):
         video_name = video_url.split('_')[-1]

@@ -24,9 +24,9 @@ from utils.eta_tool import ETATool
 from utils.basedir import BASEDIR
 
 
-config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.9
-set_session(tf.Session(config=config))
+# config = tf.ConfigProto()
+# config.gpu_options.per_process_gpu_memory_fraction = 0.9
+# set_session(tf.Session(config=config))
 
 os.chdir(BASEDIR)
 
@@ -194,10 +194,10 @@ class TrafficLightsModel:
         # self.reduction = 2
         self.batch_size = 32
         self.test_percentage = 0.2  # percentage of total data to be validated on
-        self.num_flow_images = 3  # number of extra images to randomly generate per each input image
-        self.dataloader_workers = 14  # used by keras to load input images, there is diminishing returns at high values (>~10)
+        self.num_flow_images = 2  # number of extra images to randomly generate per each input image
+        self.dataloader_workers = 16  # used by keras to load input images, there is diminishing returns at high values (>~10)
 
-        self.limit_samples = 5500  # only is used to create transformed data
+        self.max_samples_per_class = 6000  # unused after transformed data is created
 
         self.model = None
 
@@ -213,19 +213,16 @@ class TrafficLightsModel:
         if self.needs_reset:
             self.reset_countdown()
             self.reset_data()
-            self.process_images()
-            self.create_val_images()  # create validation set for model
+            self.create_validation_set()  # create validation set for model
+            self.transform_images()
 
-        # continue
         self.set_class_weight()
         train_gen, valid_gen = self.get_generators()
         return train_gen, valid_gen
-        # self.train_batches(train_gen, valid_gen)
-
 
     def train_batches(self, train_generator, valid_generator, restart=False, epochs=50):
         if self.model is None or restart:
-            self.model = self.get_model()
+            self.model = self.get_model_1()
 
         # opt = keras.optimizers.RMSprop()
         # opt = keras.optimizers.Adadelta()
@@ -242,7 +239,7 @@ class TrafficLightsModel:
                                  workers=self.dataloader_workers,
                                  class_weight=self.class_weight)
 
-    def get_model(self):
+    def get_model_1(self):
         # model = Sequential()
         # model.add(Dense(64, activation='relu', input_shape=(np.product(self.cropped_shape),)))
         # model.add(Dense(32, activation='relu'))
@@ -252,6 +249,7 @@ class TrafficLightsModel:
 
         kernel_size = (3, 3)  # almost no effect on model size
 
+        print('USING NEW MODEL')
         model = Sequential()
         model.add(Conv2D(12, kernel_size, strides=1, activation='relu', input_shape=self.cropped_shape))
         # model.add(MaxPooling2D(pool_size=(2, 2)))
@@ -260,19 +258,76 @@ class TrafficLightsModel:
         model.add(Conv2D(24, kernel_size, strides=1, activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
-        # model.add(Conv2D(48, kernel_size, strides=1, activation='relu'))
+        model.add(Conv2D(48, kernel_size, strides=1, activation='relu'))
         model.add(MaxPooling2D(pool_size=(3, 3)))
 
         model.add(Conv2D(64, kernel_size, strides=1, activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
-        model.add(Conv2D(16, kernel_size, strides=1, activation='relu'))
+        model.add(Conv2D(12, kernel_size, strides=1, activation='relu'))
         # model.add(MaxPooling2D(pool_size=(2, 2)))
 
         model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
         model.add(Dense(32, activation='relu'))
         # model.add(Dropout(0.3))
         model.add(Dense(64, activation='relu'))
+        model.add(Dense(64, activation='relu'))
+        # model.add(Dropout(0.3))
+        # kernel_size = (3, 3)  # (3, 3)
+        #
+        # model = Sequential()
+        # model.add(Conv2D(12, kernel_size, activation='relu', input_shape=self.cropped_shape))
+        # model.add(MaxPooling2D(pool_size=(3, 3)))
+        # # model.add(BatchNormalization())
+        #
+        # model.add(Conv2D(12, kernel_size, activation='relu'))
+        # model.add(MaxPooling2D(pool_size=(3, 3)))
+        #
+        # model.add(Conv2D(24, kernel_size, activation='relu'))
+        # model.add(MaxPooling2D(pool_size=(3, 3)))
+        #
+        # model.add(Conv2D(36, kernel_size, activation='relu'))
+        #
+        #
+        # model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
+        # model.add(Dense(32, activation='relu'))
+        # # model.add(Dropout(0.3))
+        # model.add(Dense(64, activation='relu'))
+        # # model.add(Dropout(0.3))
+        if not self.use_model_labels:
+            model.add(Dense(len(self.data_labels), activation='softmax'))
+        else:
+            model.add(Dense(len(self.model_labels), activation='softmax'))
+        return model
+
+    def get_model_2(self):
+        # model = Sequential()
+        # model.add(Dense(64, activation='relu', input_shape=(np.product(self.cropped_shape),)))
+        # model.add(Dense(32, activation='relu'))
+        # model.add(Dense(32, activation='relu'))
+        # model.add(Dense(4, activation='softmax'))
+        # return model
+        # model.add(Dropout(0.3))
+
+        kernel_size = (3, 3)  # (3, 3)
+
+        model = Sequential()
+        model.add(Conv2D(12, kernel_size, activation='relu', input_shape=self.cropped_shape))
+        model.add(MaxPooling2D(pool_size=(3, 3)))
+        # model.add(BatchNormalization())
+
+        model.add(Conv2D(12, kernel_size, activation='relu'))
+        model.add(MaxPooling2D(pool_size=(3, 3)))
+
+        model.add(Conv2D(24, kernel_size, activation='relu'))
+        model.add(MaxPooling2D(pool_size=(3, 3)))
+
+        model.add(Conv2D(36, kernel_size, activation='relu'))
+        print('USING OLD MODEL')
+
+        model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
+        model.add(Dense(32, activation='relu'))
+        # model.add(Dropout(0.3))
         model.add(Dense(64, activation='relu'))
         # model.add(Dropout(0.3))
         if not self.use_model_labels:
@@ -291,72 +346,80 @@ class TrafficLightsModel:
         valid_generator = CustomDataGenerator(valid_dir, self.data_labels, self.model_labels, self.transform_old_labels, self.use_model_labels, self.batch_size * 2)
         return train_generator, valid_generator
 
-    def create_val_images(self):
-        print('Separating validation images!', flush=True)
-        images = []
+    def create_validation_set(self):
+        print('Your system may slow until the process completes. Try reducing the max threads if it locks up.')
+        print('Do NOT delete anything in the `.processed` folder while it\'s working.\n')
+        print('Creating validation set!', flush=True)
         for idx, image_class in enumerate(self.data_labels):  # load all image names and class
-            class_dir = '{}/{}'.format(self.proc_folder, image_class)
-            for image in os.listdir(class_dir):
-                images.append({'path': '{}/{}'.format(class_dir, image), 'class': image_class})
+            print('Working on class: {}'.format(image_class))
+            class_dir = 'data/{}'.format(image_class)
+            images = [{'img_path': '{}/{}'.format(class_dir, img),
+                       'img_name': img} for img in os.listdir(class_dir)]
 
-        train, valid = train_test_split(images, test_size=self.test_percentage)
-        for sample in train:
-            img_name = sample['path'].split('/')[-1]
-            shutil.move(sample['path'], '{}/.train/{}/{}'.format(self.proc_folder, sample['class'], img_name))
-        for sample in valid:
-            img_name = sample['path'].split('/')[-1]
-            shutil.move(sample['path'], '{}/.validation/{}/{}'.format(self.proc_folder, sample['class'], img_name))
+            random.shuffle(images)
+            while len(images) > self.max_samples_per_class:  # only keep up to max samples
+                del images[random.randint(0, len(images) - 1)]
 
-        for image_class in self.data_labels:
-            io_sleep()
-            os.rmdir('{}/{}'.format(self.proc_folder, image_class))  # should be empty, throw error if not
+            train, valid = train_test_split(images, test_size=self.test_percentage)  # split by class
 
-        open(self.finished_file, 'a').close()  # create finished file so we know in the future not to process data
-        print('Finished, moving on to training!')
+            for img in train:
+                shutil.copyfile(img['img_path'], '{}/.train_temp/{}/{}'.format(self.proc_folder, image_class, img['img_name']))
+            for img in valid:
+                shutil.copyfile(img['img_path'], '{}/.validation_temp/{}/{}'.format(self.proc_folder, image_class, img['img_name']))
+        print()
 
-    def transform_and_crop_image(self, image_class, photo, datagen):
+    def transform_and_crop_image(self, image_class, photo_path, datagen, is_train):
         self.datagen_threads += 1
-        base_img = cv2.imread('data/{}/{}'.format(image_class, photo))  # loads uint8 BGR array
-        imgs = np.array([base_img for _ in range(self.num_flow_images)])
+        original_img = cv2.imread(photo_path)  # loads uint8 BGR array
+        flowed_imgs = []
+        if is_train:  # don't transform validation images
+            imgs = np.array([original_img for _ in range(self.num_flow_images)])
+            # randomly transform images
+            try:
+                batch = datagen.flow(imgs, batch_size=self.num_flow_images)[0]
+            except Exception as e:
+                print(imgs)
+                print(photo_path)
+                raise Exception('Error in transform_and_crop_image: {}'.format(e))
+            flowed_imgs = [img.astype(np.uint8) for img in batch]  # convert from float32 0 to 255 to uint8 0 to 255
 
-        # randomly transform images
-        try:
-            batch = datagen.flow(imgs, batch_size=self.num_flow_images)[0]
-        except:
-            print(imgs)
-            print(photo)
-            raise Exception()
-        flowed_imgs = [img.astype(np.uint8) for img in batch]  # convert from float32 0 to 255 to uint8 0 to 255
-
-        flowed_imgs.append(base_img)  # append original non flowed image so we can crop and copy original cropped as well.
+        flowed_imgs.append(original_img)  # append original non flowed image so we can crop and copy original as well
         cropped_imgs = [self.crop_image(img) for img in flowed_imgs]
-        for k, img in enumerate(cropped_imgs):
-            cv2.imwrite('{}/{}/{}.{}.png'.format(self.proc_folder, image_class, photo[:-4], k), img)
+        for idx, img in enumerate(cropped_imgs):
+            photo_name = photo_path.split('/')[-1][:-4]  # get name from path excluding extension
+            # print('{}/.train/{}/{}'.format(self.proc_folder, image_class, photo_name))
+            if is_train:
+                cv2.imwrite('{}/.train/{}/{}.{}.png'.format(self.proc_folder, image_class, photo_name, idx), img)
+            else:
+                cv2.imwrite('{}/.validation/{}/{}.{}.png'.format(self.proc_folder, image_class, photo_name, idx), img)
         self.datagen_threads -= 1
 
-    def process_class(self, image_class, photos, datagen):  # manages processing threads
+    def process_class(self, image_class, photo_paths, datagen, is_train):  # manages processing threads
         t = time.time()
-        self.eta_tool.init(t, len(photos))
-        for idx, photo in enumerate(photos):
+        self.eta_tool.init(t, len(photo_paths))
+        train_msg = 'train' if is_train else 'valid'
+        for idx, photo_path in enumerate(photo_paths):
             self.eta_tool.log(idx, time.time())
             if time.time() - t > 15:
                 # print('{}: Working on photo {} of {}.'.format(image_class, idx + 1, len(photos)))
-                print('{}: Time to completion: {}'.format(image_class, self.eta_tool.get_eta))
+                print('{} ({}): Time to completion: {}'.format(image_class, train_msg, self.eta_tool.get_eta))
                 t = time.time()
 
-            threading.Thread(target=self.transform_and_crop_image, args=(image_class, photo, datagen)).start()
+            threading.Thread(target=self.transform_and_crop_image, args=(image_class, photo_path, datagen, is_train)).start()
             time.sleep(1 / 7.)  # spin up threads slightly slower
             while self.datagen_threads > self.datagen_max_threads:
-                pass
+                time.sleep(1)
 
         while self.datagen_threads != 0:  # wait for all threads to complete before continuing
-            pass
-        print('{}: Finished!'.format(image_class))
+            time.sleep(1)
+
+        print('{} ({}): Finished!'.format(image_class, train_msg))
 
     def reset_countdown(self):
         if os.path.exists(self.proc_folder):  # don't show message if no data to delete
             print('WARNING: RESETTING PROCESSED DATA!', flush=True)
-            print('This means all randomly transformed images will be erased and regenerated. Which may take some time depending on the amount of data you have.', flush=True)
+            print('This means all randomly transformed images will be erased and regenerated. '
+                  'Which may take some time depending on the amount of data you have.', flush=True)
             time.sleep(2)
             for i in range(10):
                 sec = 10 - i
@@ -370,42 +433,47 @@ class TrafficLightsModel:
         t_crop = 0  # top, 100 is good. test higher vals
         return img_array[t_crop:self.y_hood_crop, h_crop:-h_crop]  # removes 150 pixels from each side, removes hood, and removes 100 pixels from top
 
-    def process_images(self):
+    def transform_images(self):
         datagen = ImageDataGenerator(
-                rotation_range=3.75,
-                width_shift_range=0,
-                height_shift_range=0,
-                shear_range=0,
-                zoom_range=0.15,
-                horizontal_flip=False,  # todo: testing false
-                fill_mode='nearest')
+            rotation_range=2.5,
+            width_shift_range=0,
+            height_shift_range=0,
+            shear_range=0,
+            zoom_range=0.1,
+            horizontal_flip=False,  # todo: testing false
+            fill_mode='nearest')
 
-        print('Randomly transforming and cropping input images, please wait...'.format(len(self.data_labels)))
-        print('Your system may slow until the process completes. Try reducing the max threads if it locks up.')
-        print('Do NOT delete anything in the `.processed` folder while it\'s working.')
+        print('Randomly transforming and cropping input images, please wait...')
         for image_class in self.data_labels:
-            photos = os.listdir('data/{}'.format(image_class))
-            random.shuffle(photos)
+            photos_train = os.listdir('{}/.train_temp/{}'.format(self.proc_folder, image_class))
+            photos_valid = os.listdir('{}/.validation_temp/{}'.format(self.proc_folder, image_class))
 
-            while len(photos) > self.limit_samples:
-                del photos[random.randint(0, len(photos) - 1)]
+            photos_train = ['{}/.train_temp/{}/{}'.format(self.proc_folder, image_class, img) for img in photos_train]  # adds path
+            photos_valid = ['{}/.validation_temp/{}/{}'.format(self.proc_folder, image_class, img) for img in photos_valid]
 
-            self.process_class(image_class, photos, datagen)
-        print('All finished!')
+            self.process_class(image_class, photos_train, datagen, True)
+            self.process_class(image_class, photos_valid, datagen, False)  # no transformations, only crop for valid
+        shutil.rmtree('{}/.train_temp'.format(self.proc_folder))
+        shutil.rmtree('{}/.validation_temp'.format(self.proc_folder))
+
+        open(self.finished_file, 'a').close()  # create finished file so we know in the future not to process data
+        print('All finished, moving on to training!')
 
     def reset_data(self):
         if os.path.exists(self.proc_folder):
             shutil.rmtree(self.proc_folder, ignore_errors=True)
-        finished_file = self.finished_file
-        if os.path.exists(finished_file):
-            os.remove(finished_file)
+
+        if os.path.exists(self.finished_file):
+            os.remove(self.finished_file)
         io_sleep()
-        os.makedirs('{}/{}'.format(self.proc_folder, '.train'))
-        os.mkdir('{}/{}'.format(self.proc_folder, '.validation'))
+
+        os.mkdir(self.proc_folder)
         for image_class in self.data_labels:
-            os.mkdir('{}/{}'.format(self.proc_folder, image_class))
-            os.mkdir('{}/.train/{}'.format(self.proc_folder, image_class))
-            os.mkdir('{}/.validation/{}'.format(self.proc_folder, image_class))
+            # os.mkdir('{}/{}'.format(self.proc_folder, image_class))
+            os.makedirs('{}/.train/{}'.format(self.proc_folder, image_class))
+            os.makedirs('{}/.train_temp/{}'.format(self.proc_folder, image_class))
+            os.makedirs('{}/.validation/{}'.format(self.proc_folder, image_class))
+            os.makedirs('{}/.validation_temp/{}'.format(self.proc_folder, image_class))
 
     def set_class_weight(self):
         if not self.use_model_labels:
@@ -445,10 +513,10 @@ class TrafficLightsModel:
 
     @property
     def needs_reset(self):
-        return not os.path.exists(self.finished_file) or self.force_reset
+        return not os.path.exists(self.finished_file) or not os.path.exists(self.proc_folder) or self.force_reset
 
 
 traffic = TrafficLightsModel(force_reset=False)
 train_gen, valid_gen = traffic.do_init()
 if __name__ == '__main__':
-    traffic.train_batches(train_gen, valid_gen)
+    traffic.train_batches(train_gen, valid_gen, epochs=3)
