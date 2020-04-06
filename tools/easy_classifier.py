@@ -35,7 +35,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.skip = 0
         self.user_skip = 0
 
-        self.model_name = 'latest_3_class_93_val_acc'
+        self.model_name = 'latest_true_val_acc'
         self.model = keras.models.load_model('models/h5_models/{}.h5'.format(self.model_name))
         self.graph = tf.get_default_graph()
 
