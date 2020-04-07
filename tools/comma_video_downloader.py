@@ -107,7 +107,6 @@ class CommaVideoDownloader:
             self.make_dirs('{}/{}'.format(self.downloaded_dir, route_folder))
 
             for idx, video_url in enumerate(video_urls):
-                # print('Downloading video {} of {}...'.format(idx + 1, len(video_urls)), flush=True)
                 video_name = dongle_id + '_' + self.get_name_from_url(video_url)[0]
                 video_save_path = '{}/{}/{}'.format(self.downloaded_dir, route_folder, video_name)
 
@@ -115,6 +114,7 @@ class CommaVideoDownloader:
                     # print('Video already downloaded: {}, skipping...'.format(video_name))
                     self.update_db(dongle_id, video_name)  # add downloaded videos to db if not in db
                     continue
+                print('Downloading video {} of {}...'.format(idx + 1, len(video_urls)), flush=True)
 
                 video = requests.get(video_url)
 
