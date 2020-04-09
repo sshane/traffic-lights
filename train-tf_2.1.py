@@ -1,17 +1,13 @@
 import tensorflow as tf
-from keras.backend.tensorflow_backend import set_session
-from keras import backend as K
-# K.set_floatx('float16')
-# K.set_epsilon(1e-4)
 import os
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-from keras.preprocessing.image import ImageDataGenerator
+# from keras.preprocessing.image import ImageDataGenerator
+from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
 import cv2
-import keras
-from keras.models import Model
-from keras.models import Sequential
-from keras.layers import Conv2D, MaxPooling2D, BatchNormalization, AveragePooling2D
-from keras.layers import Activation, Dropout, Flatten, Dense
+from tensorflow import keras
+from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, BatchNormalization, AveragePooling2D
+from tensorflow.keras.layers import Activation, Dropout, Flatten, Dense
 from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 import numpy as np
@@ -24,10 +20,14 @@ from utils.custom_data_generator import CustomDataGenerator
 from utils.eta_tool import ETATool
 from utils.basedir import BASEDIR
 
-
-# config = tf.ConfigProto()
-# config.gpu_options.per_process_gpu_memory_fraction = 0.9
-# set_session(tf.Session(config=config))
+# gpus = tf.config.experimental.list_physical_devices('GPU')
+# limit_vram_gb = 5
+# if gpus:
+#     try:
+#         tf.config.experimental.set_virtual_device_configuration(gpus[0], [
+#             tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024 * limit_vram_gb)])
+#     except RuntimeError as e:
+#         print(e)
 
 os.chdir(BASEDIR)
 
@@ -193,10 +193,10 @@ class TrafficLightsModel:
         self.proc_folder = 'data/.processed'
 
         # self.reduction = 2
-        self.batch_size = 32
+        self.batch_size = 24
         self.test_percentage = 0.2  # percentage of total data to be validated on
         self.num_flow_images = 2  # number of extra images to randomly generate per each input image
-        self.dataloader_workers = 16  # used by keras to load input images, there is diminishing returns at high values (>~10)
+        self.dataloader_workers = 24  # used by keras to load input images, there is diminishing returns at high values (>~10)
 
         self.max_samples_per_class = 6000  # unused after transformed data is created
 
@@ -234,11 +234,11 @@ class TrafficLightsModel:
                            optimizer=opt,
                            metrics=['accuracy'])
 
-        self.model.fit_generator(train_generator,
-                                 epochs=epochs,
-                                 validation_data=valid_generator,
-                                 workers=self.dataloader_workers,
-                                 class_weight=self.class_weight)
+        self.model.fit(train_generator,
+                       epochs=epochs,
+                       validation_data=valid_generator,
+                       workers=self.dataloader_workers)
+                       # class_weight=self.class_weight)
 
     def get_model_1(self):
         # model = Sequential()
@@ -253,48 +253,18 @@ class TrafficLightsModel:
         print('USING NEW MODEL')
         model = Sequential()
         model.add(Conv2D(12, kernel_size, strides=1, activation='relu', input_shape=self.cropped_shape))
-        # model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(MaxPooling2D(pool_size=(3, 3)))
         # model.add(BatchNormalization())
 
-        model.add(Conv2D(24, kernel_size, strides=1, activation='relu'))
+        model.add(Conv2D(24, kernel_size, strides=2, activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
-        model.add(Conv2D(48, kernel_size, strides=1, activation='relu'))
-        model.add(MaxPooling2D(pool_size=(3, 3)))
-
-        model.add(Conv2D(64, kernel_size, strides=1, activation='relu'))
+        model.add(Conv2D(32, kernel_size, strides=1, activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
-
-        model.add(Conv2D(12, kernel_size, strides=1, activation='relu'))
-        # model.add(MaxPooling2D(pool_size=(2, 2)))
 
         model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
         model.add(Dense(32, activation='relu'))
-        # model.add(Dropout(0.3))
         model.add(Dense(64, activation='relu'))
-        model.add(Dense(64, activation='relu'))
-        # model.add(Dropout(0.3))
-        # kernel_size = (3, 3)  # (3, 3)
-        #
-        # model = Sequential()
-        # model.add(Conv2D(12, kernel_size, activation='relu', input_shape=self.cropped_shape))
-        # model.add(MaxPooling2D(pool_size=(3, 3)))
-        # # model.add(BatchNormalization())
-        #
-        # model.add(Conv2D(12, kernel_size, activation='relu'))
-        # model.add(MaxPooling2D(pool_size=(3, 3)))
-        #
-        # model.add(Conv2D(24, kernel_size, activation='relu'))
-        # model.add(MaxPooling2D(pool_size=(3, 3)))
-        #
-        # model.add(Conv2D(36, kernel_size, activation='relu'))
-        #
-        #
-        # model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
-        # model.add(Dense(32, activation='relu'))
-        # # model.add(Dropout(0.3))
-        # model.add(Dense(64, activation='relu'))
-        # # model.add(Dropout(0.3))
         if not self.use_model_labels:
             model.add(Dense(len(self.data_labels), activation='softmax'))
         else:
@@ -344,7 +314,7 @@ class TrafficLightsModel:
         train_dir = '{}/.train'.format(self.proc_folder)
         valid_dir = '{}/.validation'.format(self.proc_folder)
         train_generator = CustomDataGenerator(train_dir, self.data_labels, self.model_labels, self.transform_old_labels, self.use_model_labels, self.batch_size)  # keeps data in BGR format and normalizes
-        valid_generator = CustomDataGenerator(valid_dir, self.data_labels, self.model_labels, self.transform_old_labels, self.use_model_labels, self.batch_size * 2)
+        valid_generator = CustomDataGenerator(valid_dir, self.data_labels, self.model_labels, self.transform_old_labels, self.use_model_labels, self.batch_size)
         return train_generator, valid_generator
 
     def create_validation_set(self):

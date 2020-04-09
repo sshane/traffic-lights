@@ -1,4 +1,4 @@
-from keras.backend.tensorflow_backend import set_session
+# from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
 import os
 import cv2
@@ -9,15 +9,16 @@ from threading import Thread
 from threading import Lock
 import matplotlib.pyplot as plt
 import time
-import keras
+from tensorflow import keras
 import numpy as np
 import shutil
 
+
 os.chdir(BASEDIR)
 
-config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.8
-set_session(tf.Session(config=config))
+# config = tf.ConfigProto()
+# config.gpu_options.per_process_gpu_memory_fraction = 0.8
+# set_session(tf.Session(config=config))
 
 
 class EasyClassifier:  # todo: implement smart skip. low skip value when model predicts traffic light, high skip when model predicts none
@@ -35,11 +36,10 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.skip = 0
         self.user_skip = 0
 
-        self.model_name = 'latest_true_val_acc'
+        self.model_name = 'latest'
         self.model = keras.models.load_model('models/h5_models/{}.h5'.format(self.model_name))
-        self.graph = tf.get_default_graph()
 
-        self.max_preloaded_routes = 5  # number of routes to preload (set to 0 if your system locks up or runs out of memory, barely works with 32GB)
+        self.max_preloaded_routes = 3  # number of routes to preload (set to 0 if your system locks up or runs out of memory, barely works with 32GB)
         self.preloaded_routes = []
         self.all_routes_done = False
         self.lock = Lock()
@@ -47,7 +47,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.make_dirs()
 
     def start(self):
-        Thread(target=self.route_preloader).start()
+        Thread(target=self.route_preloader, args=(self.model, )).start()
         self.classifier_manager()
 
     def classifier_manager(self):
@@ -72,7 +72,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
             else:
                 time.sleep(1)
 
-    def route_preloader(self):
+    def route_preloader(self, model):
         for route in self.routes:
             route_dir = '{}/{}'.format(self.extracted_dir, route)
             list_dir = self.sort_list_dir(os.listdir(route_dir))  # sorted using integar values of frame idx
@@ -82,7 +82,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
             if len(all_imgs) > 0:
                 print('Loaded all images! Now predicting...', flush=True)
                 with self.lock:
-                    self.preloaded_routes.append({'route_predictions': self.predict_multiple(all_imgs),
+                    self.preloaded_routes.append({'route_predictions': self.predict_multiple(all_imgs, model),
                                                   'route_name': route,
                                                   'route_dir': route_dir,
                                                   'list_dir': list_dir})
@@ -206,10 +206,9 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.skip = 0
         self.user_skip = 0
 
-    def predict_multiple(self, imgs):
+    def predict_multiple(self, imgs, model):
         imgs_cropped = [self.crop_image(img, False) for img in imgs]
-        with self.graph.as_default():  # workaround for using tf model in thread
-            predictions = self.model.predict(np.array(imgs_cropped))
+        predictions = model.predict(np.array(imgs_cropped))
         return predictions
 
     def crop_image(self, img_array, crop_top):
