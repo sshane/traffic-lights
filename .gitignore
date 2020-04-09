@@ -8,4 +8,4 @@ utils/JWT.py
 tmp/
 test/
 new_data/done/
-new_data/delete_to_stop
+new_data/delete_to_stop_extraction
