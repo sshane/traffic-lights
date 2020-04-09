@@ -39,7 +39,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.model_name = 'latest'
         self.model = keras.models.load_model('models/h5_models/{}.h5'.format(self.model_name))
 
-        self.max_preloaded_routes = 3  # number of routes to preload (set to 0 if your system locks up or runs out of memory, barely works with 32GB)
+        self.max_preloaded_routes = 1  # number of routes to preload (set to 0 if your system locks up or runs out of memory, barely works with 32GB)
         self.preloaded_routes = []
         self.all_routes_done = False
         self.lock = Lock()

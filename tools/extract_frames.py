@@ -12,9 +12,9 @@ done_dir = '{}/done'.format(BASEDIR)
 os.chdir(BASEDIR)
 
 num_threads = 0
-max_threads = 8
+max_threads = 32
 valid_extension = '.hevc'
-working_file = '{}/delete_to_stop'.format(BASEDIR)  # delete this file to stop extraction process after current video is done
+working_file = '{}/delete_to_stop_extraction'.format(BASEDIR)  # delete this file to stop extraction process after current video is done
 
 
 def write_frame(path, img, ret):
@@ -48,7 +48,7 @@ def wait_for_threads():
         time.sleep(1 / max_threads + 1)
 
 
-def rm_video(path, name):
+def mv_video(path, name):
     if not os.path.exists(done_dir):
         os.mkdir(done_dir)
     # os.remove(path)
@@ -73,17 +73,17 @@ def extract_frames():
         while ret:
             ret, frame = cap.read()
             frame_path = '{}/{}.{}.png'.format(save_dir, save_name, idx)
-            t = Thread(target=write_frame, args=(frame_path, frame, ret))
-            t.start()
+            t = Thread(target=write_frame, args=(frame_path, frame, ret)).start()
             wait_for_threads()
             idx += 1
         cap.release()
         cv2.destroyAllWindows()
         wait_for_threads()  # wait for all threads to finish before starting next video
-        rm_video(video_path, save_name)  # delete video once done
+        mv_video(video_path, save_name)  # move video once done
         if stop_working():
             print('Working file deleted, stopping!')
             return
+    os.remove(working_file)
     print('\nFinished extracting all videos!')
 
 
