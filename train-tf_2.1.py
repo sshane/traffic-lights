@@ -19,6 +19,7 @@ import pickle
 from utils.custom_data_generator import CustomDataGenerator
 from utils.eta_tool import ETATool
 from utils.basedir import BASEDIR
+from threading import Lock
 
 # gpus = tf.config.experimental.list_physical_devices('GPU')
 # limit_vram_gb = 5
@@ -193,10 +194,10 @@ class TrafficLightsModel:
         self.proc_folder = 'data/.processed'
 
         # self.reduction = 2
-        self.batch_size = 24
+        self.batch_size = 16
         self.test_percentage = 0.2  # percentage of total data to be validated on
-        self.num_flow_images = 2  # number of extra images to randomly generate per each input image
-        self.dataloader_workers = 24  # used by keras to load input images, there is diminishing returns at high values (>~10)
+        self.num_flow_images = 3  # number of extra images to randomly generate per each input image
+        self.dataloader_workers = 32  # used by keras to load input images, there is diminishing returns at high values (>~10)
 
         self.max_samples_per_class = 8000  # unused after transformed data is created
 
@@ -207,7 +208,8 @@ class TrafficLightsModel:
         self.class_weight = {}
 
         self.datagen_threads = 0
-        self.datagen_max_threads = 64  # used to generate randomly transformed data (dependant on your CPU, set lower if it starts to freeze)
+        self.datagen_max_threads = 128  # used to generate randomly transformed data (dependant on your CPU, set lower if it starts to freeze)
+        self.lock = Lock()
 
     def do_init(self):
         self.check_data()
@@ -222,7 +224,13 @@ class TrafficLightsModel:
         return train_gen, valid_gen
 
     def train_batches(self, train_generator, valid_generator, restart=False, epochs=50):
-        if self.model is None or restart:
+        print('Want to load a previous model to continue training?')
+        load_prev = input('[Y/n]: ').lower().strip()
+        if load_prev in ['y', 'yes']:
+            model_name = input('Enter the h5 model name without the .h5 suffix: ')
+            self.model = keras.models.load_model('models/h5_models/{}.h5'.format(model_name))
+            print('SUCCESSFULLY LOADED {}.h5'.format(model_name))
+        elif self.model is None or restart:
             self.model = self.get_model_1()
 
         # opt = keras.optimizers.RMSprop()
@@ -340,7 +348,8 @@ class TrafficLightsModel:
         print()
 
     def transform_and_crop_image(self, image_class, photo_path, datagen, is_train):
-        self.datagen_threads += 1
+        with self.lock:
+            self.datagen_threads += 1
         original_img = cv2.imread(photo_path)  # loads uint8 BGR array
         flowed_imgs = []
         if is_train:  # don't transform validation images
@@ -363,7 +372,8 @@ class TrafficLightsModel:
                 cv2.imwrite('{}/.train/{}/{}.{}.png'.format(self.proc_folder, image_class, photo_name, idx), img)
             else:
                 cv2.imwrite('{}/.validation/{}/{}.{}.png'.format(self.proc_folder, image_class, photo_name, idx), img)
-        self.datagen_threads -= 1
+        with self.lock:
+            self.datagen_threads -= 1
 
     def process_class(self, image_class, photo_paths, datagen, is_train):  # manages processing threads
         t = time.time()
@@ -422,6 +432,7 @@ class TrafficLightsModel:
             photos_valid = ['{}/.validation_temp/{}/{}'.format(self.proc_folder, image_class, img) for img in photos_valid]
 
             self.process_class(image_class, photos_train, datagen, True)
+            print('starting cropping of validation data')
             self.process_class(image_class, photos_valid, datagen, False)  # no transformations, only crop for valid
         shutil.rmtree('{}/.train_temp'.format(self.proc_folder))
         shutil.rmtree('{}/.validation_temp'.format(self.proc_folder))
