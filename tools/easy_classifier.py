@@ -1,24 +1,22 @@
-# from keras.backend.tensorflow_backend import set_session
-import tensorflow as tf
 import os
 import cv2
-import random
-from utils.basedir import BASEDIR
-import string
+try:
+    from utils.basedir import BASEDIR
+except ImportError:
+    BASEDIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 from threading import Thread
 from threading import Lock
 import matplotlib.pyplot as plt
 import time
-from tensorflow import keras
+try:
+    from tensorflow import keras
+    has_tf = True
+except:
+    has_tf = False
 import numpy as np
 import shutil
 
-
 os.chdir(BASEDIR)
-
-# config = tf.ConfigProto()
-# config.gpu_options.per_process_gpu_memory_fraction = 0.8
-# set_session(tf.Session(config=config))
 
 
 class EasyClassifier:  # todo: implement smart skip. low skip value when model predicts traffic light, high skip when model predicts none
@@ -41,6 +39,8 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
 
         self.max_preloaded_routes = 1  # number of routes to preload (set to 0 if your system locks up or runs out of memory, barely works with 32GB)
         self.show_predictions = False  # set to False if you don't have enough RAM to load all predictions in memory, or you do not want to show predictions
+        if not has_tf:
+            self.show_predictions = False
         self.preloaded_routes = []
         self.all_routes_done = False
         self.lock = Lock()
