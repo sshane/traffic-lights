@@ -198,7 +198,7 @@ class TrafficLightsModel:
         self.num_flow_images = 2  # number of extra images to randomly generate per each input image
         self.dataloader_workers = 24  # used by keras to load input images, there is diminishing returns at high values (>~10)
 
-        self.max_samples_per_class = 6000  # unused after transformed data is created
+        self.max_samples_per_class = 8000  # unused after transformed data is created
 
         self.model = None
 
@@ -207,7 +207,7 @@ class TrafficLightsModel:
         self.class_weight = {}
 
         self.datagen_threads = 0
-        self.datagen_max_threads = 24  # used to generate randomly transformed data (dependant on your CPU, set lower if it starts to freeze)
+        self.datagen_max_threads = 64  # used to generate randomly transformed data (dependant on your CPU, set lower if it starts to freeze)
 
     def do_init(self):
         self.check_data()
@@ -377,9 +377,8 @@ class TrafficLightsModel:
                 t = time.time()
 
             threading.Thread(target=self.transform_and_crop_image, args=(image_class, photo_path, datagen, is_train)).start()
-            time.sleep(1 / 7.)  # spin up threads slightly slower
             while self.datagen_threads > self.datagen_max_threads:
-                time.sleep(1)
+                time.sleep(1 / 5.)
 
         while self.datagen_threads != 0:  # wait for all threads to complete before continuing
             time.sleep(1)
