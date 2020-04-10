@@ -40,6 +40,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.model = keras.models.load_model('models/h5_models/{}.h5'.format(self.model_name))
 
         self.max_preloaded_routes = 1  # number of routes to preload (set to 0 if your system locks up or runs out of memory, barely works with 32GB)
+        self.show_predictions = False  # set to False if you don't have enough RAM to load all predictions in memory, or you do not want to show predictions
         self.preloaded_routes = []
         self.all_routes_done = False
         self.lock = Lock()
@@ -77,22 +78,28 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
             route_dir = '{}/{}'.format(self.extracted_dir, route)
             list_dir = self.sort_list_dir(os.listdir(route_dir))  # sorted using integar values of frame idx
             print('Route: {}'.format(route))
-            print('Loading all images from route to show predictions, please wait...', flush=True)
-            all_imgs = self.load_imgs_from_directory(list_dir, route_dir)
-            if len(all_imgs) > 0:
-                print('Loaded all images! Now predicting...', flush=True)
+            if self.show_predictions:
+                print('Loading all images from route to show predictions, please wait...', flush=True)
+                all_imgs = self.load_imgs_from_directory(list_dir, route_dir)
+                if len(all_imgs) > 0:
+                    print('Loaded all images! Now predicting...', flush=True)
+                    with self.lock:
+                        self.preloaded_routes.append({'route_predictions': self.predict_multiple(all_imgs, model),
+                                                      'route_name': route,
+                                                      'route_dir': route_dir,
+                                                      'list_dir': list_dir})
+                    print('Preloaded route!')
+                else:
+                    print('Skipping empty folder...')
+                    self.move_folder(route_dir, self.already_classified_dir)
+                del all_imgs  # free memory
+                del list_dir
+            else:
                 with self.lock:
-                    self.preloaded_routes.append({'route_predictions': self.predict_multiple(all_imgs, model),
+                    self.preloaded_routes.append({'route_predictions': None,
                                                   'route_name': route,
                                                   'route_dir': route_dir,
                                                   'list_dir': list_dir})
-                print('Preloaded route!')
-            else:
-                print('Skipping empty folder...')
-                self.move_folder(route_dir, self.already_classified_dir)
-
-            del all_imgs  # free memory
-            del list_dir
 
             while len(self.preloaded_routes) >= self.max_preloaded_routes:
                 time.sleep(1)  # too many preloaded, wait until user is done with preloaded routes
@@ -101,7 +108,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
 
     def start_classifying(self, route):
         print('Route: {}'.format(route['route_name']))
-        for idx, (img_name, pred) in enumerate(zip(route['list_dir'], route['route_predictions'])):
+        for idx, img_name in enumerate(route['list_dir']):
             if self.skip != 0 and self.user_skip == 0:  # this skips ahead in time
                 self.skip -= 1
                 continue
@@ -118,12 +125,15 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
             plt.clf()
             plt.imshow(self.crop_image(self.BGR2RGB(img), False))
 
-            pred_idx = np.argmax(pred)
-
-            plt.title('Prediction: {} ({}%)'.format(self.model_labels[pred_idx], round(pred[pred_idx] * 100, 2)))
+            if self.show_predictions:
+                pred = route['route_predictions'][idx]
+                pred_idx = np.argmax(pred)
+                plt.title('Prediction: {} ({}%)'.format(self.model_labels[pred_idx], round(pred[pred_idx] * 100, 2)))
+            else:
+                plt.title('Route: {}, frame: {}'.format(route['route_name'], idx))
             plt.pause(0.01)
 
-            user_out = self.get_true_label(self.data_labels[pred_idx])
+            user_out = self.get_true_label()
             if user_out.skip:
                 continue
             elif user_out.label is not None:
@@ -153,7 +163,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
             imgs.append(np.array((img / 255.0), dtype=np.float32))
         return imgs
 
-    def get_true_label(self, model_pred):
+    def get_true_label(self):
         class ReturnClass:
             label = None
             skip = False
