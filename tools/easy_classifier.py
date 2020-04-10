@@ -126,7 +126,11 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
             print('At frame: {}'.format(idx))
 
             img_path = '{}/{}'.format(route['route_dir'], img_name)
-            img = cv2.imread(img_path)
+            try:
+                img = cv2.imread(img_path)
+            except:
+                print('Skipping corrupted image!')
+                continue
             plt.clf()
             plt.imshow(self.crop_image(self.BGR2RGB(img), False))
 
