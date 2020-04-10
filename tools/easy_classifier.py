@@ -21,6 +21,7 @@ os.chdir(BASEDIR)
 
 class EasyClassifier:  # todo: implement smart skip. low skip value when model predicts traffic light, high skip when model predicts none
     def __init__(self):
+        global has_tf
         self.data_labels = ['RED', 'GREEN', 'YELLOW', 'NONE']
         self.model_labels = ['SLOW', 'GREEN', 'NONE']
         self.data_dir = 'data'
@@ -35,7 +36,11 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.user_skip = 0
 
         self.model_name = 'latest'
-        self.model = keras.models.load_model('models/h5_models/{}.h5'.format(self.model_name))
+        try:
+            self.model = keras.models.load_model('models/h5_models/{}.h5'.format(self.model_name))
+        except:
+            has_tf = False
+            self.model = None
 
         self.max_preloaded_routes = 1  # number of routes to preload (set to 0 if your system locks up or runs out of memory, barely works with 32GB)
         self.show_predictions = False  # set to False if you don't have enough RAM to load all predictions in memory, or you do not want to show predictions
