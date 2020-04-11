@@ -194,10 +194,10 @@ class TrafficLightsModel:
         self.proc_folder = 'data/.processed'
 
         # self.reduction = 2
-        self.batch_size = 16
+        self.batch_size = 24
         self.test_percentage = 0.2  # percentage of total data to be validated on
         self.num_flow_images = 3  # number of extra images to randomly generate per each input image
-        self.dataloader_workers = 32  # used by keras to load input images, there is diminishing returns at high values (>~10)
+        self.dataloader_workers = 64  # used by keras to load input images, there is diminishing returns at high values (>~10)
 
         self.max_samples_per_class = 8000  # unused after transformed data is created
 
@@ -236,7 +236,8 @@ class TrafficLightsModel:
         # opt = keras.optimizers.RMSprop()
         # opt = keras.optimizers.Adadelta()
         # opt = keras.optimizers.Adagrad()
-        opt = keras.optimizers.Adam(0.001*.4)
+        # opt = keras.optimizers.Adam(0.001*.4)
+        opt = keras.optimizers.Adam()
 
         self.model.compile(loss='categorical_crossentropy',
                            optimizer=opt,
@@ -245,8 +246,8 @@ class TrafficLightsModel:
         self.model.fit(train_generator,
                        epochs=epochs,
                        validation_data=valid_generator,
-                       workers=self.dataloader_workers)
-                       # class_weight=self.class_weight)
+                       workers=self.dataloader_workers,
+                       class_weight=self.class_weight)
 
     def get_model_1(self):
         # model = Sequential()
@@ -291,17 +292,18 @@ class TrafficLightsModel:
         kernel_size = (3, 3)  # (3, 3)
 
         model = Sequential()
-        model.add(Conv2D(12, kernel_size, activation='relu', input_shape=self.cropped_shape))
-        model.add(MaxPooling2D(pool_size=(3, 3)))
+        model.add(Conv2D(6, kernel_size, activation='relu', input_shape=self.cropped_shape))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
         # model.add(BatchNormalization())
 
         model.add(Conv2D(12, kernel_size, activation='relu'))
-        model.add(MaxPooling2D(pool_size=(3, 3)))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
 
-        model.add(Conv2D(24, kernel_size, activation='relu'))
-        model.add(MaxPooling2D(pool_size=(3, 3)))
+        model.add(Conv2D(16, kernel_size, activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
 
         model.add(Conv2D(36, kernel_size, activation='relu'))
+        model.add(MaxPooling2D(pool_size=(3, 3)))
         print('USING OLD MODEL')
 
         model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
@@ -500,4 +502,4 @@ class TrafficLightsModel:
 traffic = TrafficLightsModel(force_reset=False)
 train_gen, valid_gen = traffic.do_init()
 if __name__ == '__main__':
-    traffic.train_batches(train_gen, valid_gen, epochs=3)
+    traffic.train_batches(train_gen, valid_gen, epochs=15)

@@ -35,15 +35,15 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
         self.skip = 0
         self.user_skip = 0
 
-        self.model_name = 'latest'
+        self.model_name = 'very_confident!'
         try:
             self.model = keras.models.load_model('models/h5_models/{}.h5'.format(self.model_name))
         except:
             has_tf = False
             self.model = None
 
-        self.max_preloaded_routes = 1  # number of routes to preload (set to 0 if your system locks up or runs out of memory, barely works with 32GB)
-        self.show_predictions = False  # set to False if you don't have enough RAM to load all predictions in memory, or you do not want to show predictions
+        self.max_preloaded_routes = 2  # number of routes to preload (set to 0 if your system locks up or runs out of memory, barely works with 32GB)
+        self.show_predictions = True  # set to False if you don't have enough RAM to load all predictions in memory, or you do not want to show predictions
         if not has_tf:
             self.show_predictions = False
         self.preloaded_routes = []
@@ -76,6 +76,7 @@ class EasyClassifier:  # todo: implement smart skip. low skip value when model p
                 print('All routes classified!')
                 return
             else:
+                print('Waiting for route to be loaded...')
                 time.sleep(1)
 
     def route_preloader(self, model):
