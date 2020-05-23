@@ -1,12 +1,12 @@
-#from tensorflow.keras import backend as K
-from keras import backend as K
+from tensorflow.keras import backend as K
+# from keras import backend as K
 import tensorflow as tf
 import os
-from keras.models import load_model
-from utils.basedir import BASEDIR
-#from tensorflow.keras.models import load_model
+# from keras.models import load_model
+from tensorflow.keras.models import load_model
 
-os.chdir('{}/models'.format(BASEDIR))
+BASEDIR = '/home/shane/models/traffic'
+os.chdir(BASEDIR)
 
 K.clear_session()
 def freeze_session(session, keep_var_names=None, output_names=None, clear_devices=True):
@@ -40,9 +40,9 @@ def freeze_session(session, keep_var_names=None, output_names=None, clear_device
         return frozen_graph
 
 K.set_learning_phase(0)
-model_name = "traffic_2_class_95_val_acc"
+model_name = "very_confident!"
 
-use_keras = True
+use_keras = False
 if use_keras:
     model = load_model("h5_models/"+model_name+".h5")
 else:

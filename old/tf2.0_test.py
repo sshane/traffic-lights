@@ -1,9 +1,14 @@
-import tensorflow as tf
+# from tensorflow.keras.mixed_precision import experimental as mixed_precision
+# policy = mixed_precision.Policy('mixed_float16')
+# mixed_precision.set_policy(policy)
+
+# import tensorflow as tf
+#
 # gpus = tf.config.experimental.list_physical_devices('GPU')
 #
-# tf.config.experimental.set_virtual_device_configuration(gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=2*1024)])
-import numpy as np
+# tf.config.experimental.set_virtual_device_configuration(gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=4.5*1024)])
 
+import numpy as np
 from tensorflow.keras.layers import Dense
 from tensorflow.python.keras.layers.cudnn_recurrent import CuDNNLSTM
 from tensorflow.keras import Sequential
@@ -21,11 +26,12 @@ print('y shape: {}'.format(y.shape))
 # input()
 model = Sequential()
 model.add(CuDNNLSTM(128, return_sequences=True, input_shape=x.shape[1:]))
-model.add(CuDNNLSTM(64, return_sequences=True))
-model.add(CuDNNLSTM(32))
-model.add(Dense(32, activation='relu'))
+model.add(CuDNNLSTM(128, return_sequences=True))
+model.add(CuDNNLSTM(64))
+model.add(Dense(64, activation='relu'))
+model.add(Dense(128, activation='relu'))
 model.add(Dense(64, activation='relu'))
 model.add(Dense(1))
 
 model.compile(optimizer='adam', loss='mse')
-model.fit(x, y, batch_size=256, epochs=500)
+model.fit(x, y, batch_size=16, epochs=500)
