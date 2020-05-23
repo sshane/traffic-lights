@@ -5,7 +5,7 @@ import random
 from tensorflow.keras.layers import Dense, Conv2D, MaxPooling2D, Flatten
 from tensorflow.keras import Sequential
 
-num_samples = 250
+num_samples = 1000
 h = 665
 w = 814
 c = 3
@@ -41,4 +41,4 @@ model.compile(loss='categorical_crossentropy',
               optimizer='adam',
               metrics=['accuracy'])
 
-model.fit(x, y, batch_size=128, epochs=500)
+model.fit(x, y, batch_size=42, epochs=500)

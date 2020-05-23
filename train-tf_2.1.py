@@ -194,12 +194,11 @@ class TrafficLightsModel:
         self.proc_folder = 'data/.processed'
 
         # self.reduction = 2
-        self.batch_size = 24
-        self.test_percentage = 0.2  # percentage of total data to be validated on
-        self.num_flow_images = 3  # number of extra images to randomly generate per each input image
+        self.batch_size = 32
+        self.test_percentage = 0.15  # percentage of total data to be validated on
         self.dataloader_workers = 64  # used by keras to load input images, there is diminishing returns at high values (>~10)
 
-        self.max_samples_per_class = 8000  # unused after transformed data is created
+        self.max_samples_per_class = 14500  # unused after transformed data is created
 
         self.model = None
 
@@ -209,6 +208,7 @@ class TrafficLightsModel:
 
         self.datagen_threads = 0
         self.datagen_max_threads = 128  # used to generate randomly transformed data (dependant on your CPU, set lower if it starts to freeze)
+        self.num_flow_images = 5  # number of extra images to randomly generate per each input image
         self.lock = Lock()
 
     def do_init(self):
@@ -231,7 +231,7 @@ class TrafficLightsModel:
             self.model = keras.models.load_model('models/h5_models/{}.h5'.format(model_name))
             print('SUCCESSFULLY LOADED {}.h5'.format(model_name))
         elif self.model is None or restart:
-            self.model = self.get_model_1()
+            self.model = self.get_model_2()
 
         # opt = keras.optimizers.RMSprop()
         # opt = keras.optimizers.Adadelta()
@@ -328,9 +328,9 @@ class TrafficLightsModel:
         return train_generator, valid_generator
 
     def create_validation_set(self):
-        print('Your system may slow until the process completes. Try reducing the max threads if it locks up.')
+        print('Your system may slow until the process completes. Try reducing `self.datagen_max_threads` if it locks up.')
         print('Do NOT delete anything in the `.processed` folder while it\'s working.\n')
-        print('Creating validation set!', flush=True)
+        print('Creating train and validation sets!', flush=True)
         for idx, image_class in enumerate(self.data_labels):  # load all image names and class
             print('Working on class: {}'.format(image_class))
             class_dir = 'data/{}'.format(image_class)
@@ -418,11 +418,11 @@ class TrafficLightsModel:
     def transform_images(self):
         datagen = ImageDataGenerator(
             rotation_range=2.5,
-            width_shift_range=0,
-            height_shift_range=0,
+            width_shift_range=0.05,
+            height_shift_range=0.05,
             shear_range=0,
             zoom_range=0.1,
-            horizontal_flip=False,  # todo: testing false
+            horizontal_flip=True,  # todo: testing false
             fill_mode='nearest')
 
         print('Randomly transforming and cropping input images, please wait...')
@@ -434,7 +434,7 @@ class TrafficLightsModel:
             photos_valid = ['{}/.validation_temp/{}/{}'.format(self.proc_folder, image_class, img) for img in photos_valid]
 
             self.process_class(image_class, photos_train, datagen, True)
-            print('starting cropping of validation data')
+            # print('starting cropping of validation data')
             self.process_class(image_class, photos_valid, datagen, False)  # no transformations, only crop for valid
         shutil.rmtree('{}/.train_temp'.format(self.proc_folder))
         shutil.rmtree('{}/.validation_temp'.format(self.proc_folder))
