@@ -24,8 +24,8 @@ class CustomDataGenerator(keras.utils.Sequence):
     def __getitem__(self, idx):
         batch_x = self.image_paths[idx * self.batch_size:(idx + 1) * self.batch_size]
         batch_y = self.image_labels[idx * self.batch_size:(idx + 1) * self.batch_size]
-        x = np.array([self.load_image(file_name) for file_name in batch_x])
-        y = np.array(batch_y)
+        x = np.array([self.load_image(file_name) for file_name in batch_x]).astype(np.float32)
+        y = np.array(batch_y).astype(np.float32)
         return x, y
 
     def __len__(self):

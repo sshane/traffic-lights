@@ -1,0 +1,57 @@
+program: train.py
+method: bayes
+metric:
+  name: val_acc
+  goal: maximize
+parameters:
+  kernel_size:
+    distribution: int_uniform
+    min: 2
+    max: 16
+  batch_size:
+    distribution: int_uniform
+    min: 16
+    max: 44
+  learning_rate:
+    distribution: uniform
+    min: 0.00028
+    max: 0.0035
+#  use_class_weight:
+#    distribution: categorical
+#    values: [True, False]
+
+  conv_1_nodes:
+    distribution: int_uniform
+    min: 3
+    max: 16
+  pool_1:
+    distribution: int_uniform
+    min: 1
+    max: 4
+
+  conv_2_nodes:
+    distribution: int_uniform
+    min: 5
+    max: 36
+  pool_2:
+    distribution: int_uniform
+    min: 1
+    max: 4
+
+  conv_3_nodes:
+    distribution: int_uniform
+    min: 6
+    max: 42
+  pool_3:
+    distribution: int_uniform
+    min: 1
+    max: 4
+
+  dense_1_nodes:
+    distribution: int_uniform
+    min: 12
+    max: 256
+  dense_2_nodes:
+    distribution: int_uniform
+    min: 16
+    max: 256
