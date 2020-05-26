@@ -1,13 +1,17 @@
 import tensorflow as tf
+from keras.backend.tensorflow_backend import set_session
+from keras import backend as K
+# K.set_floatx('float16')
+# K.set_epsilon(1e-4)
 import os
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-# from keras.preprocessing.image import ImageDataGenerator
-from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
+from keras.preprocessing.image import ImageDataGenerator
 import cv2
-from tensorflow import keras
-from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, BatchNormalization, AveragePooling2D
-from tensorflow.keras.layers import Activation, Dropout, Flatten, Dense
+import keras
+from keras.models import Model
+from keras.models import Sequential
+from keras.layers import Conv2D, MaxPooling2D, BatchNormalization, AveragePooling2D
+from keras.layers import Activation, Dropout, Flatten, Dense
 from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 import numpy as np
@@ -19,16 +23,11 @@ import pickle
 from utils.custom_data_generator import CustomDataGenerator
 from utils.eta_tool import ETATool
 from utils.basedir import BASEDIR
-from threading import Lock
 
-# gpus = tf.config.experimental.list_physical_devices('GPU')
-# limit_vram_gb = 5
-# if gpus:
-#     try:
-#         tf.config.experimental.set_virtual_device_configuration(gpus[0], [
-#             tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024 * limit_vram_gb)])
-#     except RuntimeError as e:
-#         print(e)
+
+# config = tf.ConfigProto()
+# config.gpu_options.per_process_gpu_memory_fraction = 0.9
+# set_session(tf.Session(config=config))
 
 os.chdir(BASEDIR)
 
@@ -195,10 +194,11 @@ class TrafficLightsModel:
 
         # self.reduction = 2
         self.batch_size = 32
-        self.test_percentage = 0.15  # percentage of total data to be validated on
-        self.dataloader_workers = 64  # used by keras to load input images, there is diminishing returns at high values (>~10)
+        self.test_percentage = 0.2  # percentage of total data to be validated on
+        self.num_flow_images = 2  # number of extra images to randomly generate per each input image
+        self.dataloader_workers = 16  # used by keras to load input images, there is diminishing returns at high values (>~10)
 
-        self.max_samples_per_class = 14500  # unused after transformed data is created
+        self.max_samples_per_class = 6000  # unused after transformed data is created
 
         self.model = None
 
@@ -207,9 +207,7 @@ class TrafficLightsModel:
         self.class_weight = {}
 
         self.datagen_threads = 0
-        self.datagen_max_threads = 128  # used to generate randomly transformed data (dependant on your CPU, set lower if it starts to freeze)
-        self.num_flow_images = 5  # number of extra images to randomly generate per each input image
-        self.lock = Lock()
+        self.datagen_max_threads = 24  # used to generate randomly transformed data (dependant on your CPU, set lower if it starts to freeze)
 
     def do_init(self):
         self.check_data()
@@ -224,30 +222,23 @@ class TrafficLightsModel:
         return train_gen, valid_gen
 
     def train_batches(self, train_generator, valid_generator, restart=False, epochs=50):
-        print('Want to load a previous model to continue training?')
-        load_prev = input('[Y/n]: ').lower().strip()
-        if load_prev in ['y', 'yes']:
-            model_name = input('Enter the h5 model name without the .h5 suffix: ')
-            self.model = keras.models.load_model('models/h5_models/{}.h5'.format(model_name))
-            print('SUCCESSFULLY LOADED {}.h5'.format(model_name))
-        elif self.model is None or restart:
-            self.model = self.get_model_2()
+        if self.model is None or restart:
+            self.model = self.get_model_1()
 
         # opt = keras.optimizers.RMSprop()
         # opt = keras.optimizers.Adadelta()
         # opt = keras.optimizers.Adagrad()
-        # opt = keras.optimizers.Adam(0.001*.4)
-        opt = keras.optimizers.Adam()
+        opt = keras.optimizers.Adam(0.001*.4)
 
         self.model.compile(loss='categorical_crossentropy',
                            optimizer=opt,
                            metrics=['accuracy'])
 
-        self.model.fit(train_generator,
-                       epochs=epochs,
-                       validation_data=valid_generator,
-                       workers=self.dataloader_workers,
-                       class_weight=self.class_weight)
+        self.model.fit_generator(train_generator,
+                                 epochs=epochs,
+                                 validation_data=valid_generator,
+                                 workers=self.dataloader_workers,
+                                 class_weight=self.class_weight)
 
     def get_model_1(self):
         # model = Sequential()
@@ -262,18 +253,48 @@ class TrafficLightsModel:
         print('USING NEW MODEL')
         model = Sequential()
         model.add(Conv2D(12, kernel_size, strides=1, activation='relu', input_shape=self.cropped_shape))
-        model.add(MaxPooling2D(pool_size=(3, 3)))
+        # model.add(MaxPooling2D(pool_size=(2, 2)))
         # model.add(BatchNormalization())
 
-        model.add(Conv2D(24, kernel_size, strides=2, activation='relu'))
+        model.add(Conv2D(24, kernel_size, strides=1, activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
-        model.add(Conv2D(32, kernel_size, strides=1, activation='relu'))
+        model.add(Conv2D(48, kernel_size, strides=1, activation='relu'))
+        model.add(MaxPooling2D(pool_size=(3, 3)))
+
+        model.add(Conv2D(64, kernel_size, strides=1, activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
+
+        model.add(Conv2D(12, kernel_size, strides=1, activation='relu'))
+        # model.add(MaxPooling2D(pool_size=(2, 2)))
 
         model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
         model.add(Dense(32, activation='relu'))
+        # model.add(Dropout(0.3))
         model.add(Dense(64, activation='relu'))
+        model.add(Dense(64, activation='relu'))
+        # model.add(Dropout(0.3))
+        # kernel_size = (3, 3)  # (3, 3)
+        #
+        # model = Sequential()
+        # model.add(Conv2D(12, kernel_size, activation='relu', input_shape=self.cropped_shape))
+        # model.add(MaxPooling2D(pool_size=(3, 3)))
+        # # model.add(BatchNormalization())
+        #
+        # model.add(Conv2D(12, kernel_size, activation='relu'))
+        # model.add(MaxPooling2D(pool_size=(3, 3)))
+        #
+        # model.add(Conv2D(24, kernel_size, activation='relu'))
+        # model.add(MaxPooling2D(pool_size=(3, 3)))
+        #
+        # model.add(Conv2D(36, kernel_size, activation='relu'))
+        #
+        #
+        # model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
+        # model.add(Dense(32, activation='relu'))
+        # # model.add(Dropout(0.3))
+        # model.add(Dense(64, activation='relu'))
+        # # model.add(Dropout(0.3))
         if not self.use_model_labels:
             model.add(Dense(len(self.data_labels), activation='softmax'))
         else:
@@ -292,18 +313,17 @@ class TrafficLightsModel:
         kernel_size = (3, 3)  # (3, 3)
 
         model = Sequential()
-        model.add(Conv2D(6, kernel_size, activation='relu', input_shape=self.cropped_shape))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(Conv2D(12, kernel_size, activation='relu', input_shape=self.cropped_shape))
+        model.add(MaxPooling2D(pool_size=(3, 3)))
         # model.add(BatchNormalization())
 
         model.add(Conv2D(12, kernel_size, activation='relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(MaxPooling2D(pool_size=(3, 3)))
 
-        model.add(Conv2D(16, kernel_size, activation='relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(Conv2D(24, kernel_size, activation='relu'))
+        model.add(MaxPooling2D(pool_size=(3, 3)))
 
         model.add(Conv2D(36, kernel_size, activation='relu'))
-        model.add(MaxPooling2D(pool_size=(3, 3)))
         print('USING OLD MODEL')
 
         model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
@@ -324,13 +344,13 @@ class TrafficLightsModel:
         train_dir = '{}/.train'.format(self.proc_folder)
         valid_dir = '{}/.validation'.format(self.proc_folder)
         train_generator = CustomDataGenerator(train_dir, self.data_labels, self.model_labels, self.transform_old_labels, self.use_model_labels, self.batch_size)  # keeps data in BGR format and normalizes
-        valid_generator = CustomDataGenerator(valid_dir, self.data_labels, self.model_labels, self.transform_old_labels, self.use_model_labels, self.batch_size)
+        valid_generator = CustomDataGenerator(valid_dir, self.data_labels, self.model_labels, self.transform_old_labels, self.use_model_labels, self.batch_size * 2)
         return train_generator, valid_generator
 
     def create_validation_set(self):
-        print('Your system may slow until the process completes. Try reducing `self.datagen_max_threads` if it locks up.')
+        print('Your system may slow until the process completes. Try reducing the max threads if it locks up.')
         print('Do NOT delete anything in the `.processed` folder while it\'s working.\n')
-        print('Creating train and validation sets!', flush=True)
+        print('Creating validation set!', flush=True)
         for idx, image_class in enumerate(self.data_labels):  # load all image names and class
             print('Working on class: {}'.format(image_class))
             class_dir = 'data/{}'.format(image_class)
@@ -350,8 +370,7 @@ class TrafficLightsModel:
         print()
 
     def transform_and_crop_image(self, image_class, photo_path, datagen, is_train):
-        with self.lock:
-            self.datagen_threads += 1
+        self.datagen_threads += 1
         original_img = cv2.imread(photo_path)  # loads uint8 BGR array
         flowed_imgs = []
         if is_train:  # don't transform validation images
@@ -374,8 +393,7 @@ class TrafficLightsModel:
                 cv2.imwrite('{}/.train/{}/{}.{}.png'.format(self.proc_folder, image_class, photo_name, idx), img)
             else:
                 cv2.imwrite('{}/.validation/{}/{}.{}.png'.format(self.proc_folder, image_class, photo_name, idx), img)
-        with self.lock:
-            self.datagen_threads -= 1
+        self.datagen_threads -= 1
 
     def process_class(self, image_class, photo_paths, datagen, is_train):  # manages processing threads
         t = time.time()
@@ -389,8 +407,9 @@ class TrafficLightsModel:
                 t = time.time()
 
             threading.Thread(target=self.transform_and_crop_image, args=(image_class, photo_path, datagen, is_train)).start()
+            time.sleep(1 / 7.)  # spin up threads slightly slower
             while self.datagen_threads > self.datagen_max_threads:
-                time.sleep(1 / 5.)
+                time.sleep(1)
 
         while self.datagen_threads != 0:  # wait for all threads to complete before continuing
             time.sleep(1)
@@ -418,11 +437,11 @@ class TrafficLightsModel:
     def transform_images(self):
         datagen = ImageDataGenerator(
             rotation_range=2.5,
-            width_shift_range=0.05,
-            height_shift_range=0.05,
+            width_shift_range=0,
+            height_shift_range=0,
             shear_range=0,
             zoom_range=0.1,
-            horizontal_flip=True,  # todo: testing false
+            horizontal_flip=False,  # todo: testing false
             fill_mode='nearest')
 
         print('Randomly transforming and cropping input images, please wait...')
@@ -434,7 +453,6 @@ class TrafficLightsModel:
             photos_valid = ['{}/.validation_temp/{}/{}'.format(self.proc_folder, image_class, img) for img in photos_valid]
 
             self.process_class(image_class, photos_train, datagen, True)
-            # print('starting cropping of validation data')
             self.process_class(image_class, photos_valid, datagen, False)  # no transformations, only crop for valid
         shutil.rmtree('{}/.train_temp'.format(self.proc_folder))
         shutil.rmtree('{}/.validation_temp'.format(self.proc_folder))
@@ -502,4 +520,4 @@ class TrafficLightsModel:
 traffic = TrafficLightsModel(force_reset=False)
 train_gen, valid_gen = traffic.do_init()
 if __name__ == '__main__':
-    traffic.train_batches(train_gen, valid_gen, epochs=15)
+    traffic.train_batches(train_gen, valid_gen, epochs=3)

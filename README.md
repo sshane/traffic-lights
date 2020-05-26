@@ -6,4 +6,4 @@ To start training, first unzip data.zip into the root directory of `traffic-ligh
 
 When you run train.py, it will then start a process of cropping and randomly transforming images from the dataset into the `/traffic-lights/data/.processed` directory.
 
-Depending on the amount of data and your CPU, you may want to decrease the amount of data generator threads [as defined here](train.py#L202) as it's pretty heavy on system resources. An ETA will print approximately every 15 seconds to give you feedback on how long it will take.
+Depending on the amount of data and your CPU, you may want to decrease the amount of data generator threads [as defined here](train_tf1.py#L202) as it's pretty heavy on system resources. An ETA will print approximately every 15 seconds to give you feedback on how long it will take.
