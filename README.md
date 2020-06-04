@@ -1,6 +1,6 @@
 # traffic-lights
 
-*Due to the dataset size being greater than GitHub's LFS max file size of 2GB, you can download [our dataset from Google Drive](https://drive.google.com/open?id=1SGdPQmeVqC_uhzOHk2oEm7DzAN9NeCsA), or [MEGA](https://mega.nz/#F!aDhARarQ!vfos_p1yLbj9BvJG69zsQw).*
+*Due to the large dataset size, please email me to request the full dataset. Happy to set up a torrent or Resilio Sync folder for it. [shane@smiskol.com](mailto:shane@smiskol.com?subject=Traffic%20Lights%20Dataset%20Request)*
 
 To start training, first unzip data.zip into the root directory of `traffic-lights` so that the directory tree looks like: `/traffic-lights/data/GREEN/etc.png`.
 
