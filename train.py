@@ -536,7 +536,7 @@ class TrafficLightsModel:
 hyperparameter_defaults = dict(
     kernel_size=6,
     learning_rate=0.0005,
-    batch_size=30,
+    batch_size=32,
     use_class_weight=True,
 
     conv_1_nodes=10,
