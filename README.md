@@ -2,6 +2,7 @@
 
 *Due to the large dataset size, please email me to request the full dataset. Happy to set up a torrent or Resilio Sync folder for it. [shane@smiskol.com](mailto:shane@smiskol.com?subject=Traffic%20Lights%20Dataset%20Request)*
 
+
 [If you would like to download a sample of the dataset to see if it matches your needs, here's 500 images from each label. The images are 1164x874](/DATA_SAMPLE.7z)
 
 To start training, first unzip data.zip into the root directory of `traffic-lights` so that the directory tree looks like: `/traffic-lights/data/GREEN/etc.png`.
