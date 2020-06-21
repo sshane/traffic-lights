@@ -8,7 +8,7 @@ If you would like to download a sample of the dataset to see if it matches your 
 
 Each image is 1164x874.
 
-To start training, first unzip data.zip into the root directory of `traffic-lights` so that the directory tree looks like: `/traffic-lights/data/GREEN/etc.png`.
+To start training, first unzip one of the datasets into the root directory of `traffic-lights` so that the directory tree looks like: `/traffic-lights/data/GREEN/etc.png`.
 
 When you run train.py, it will then start a process of cropping and randomly transforming images from the dataset into the `/traffic-lights/data/.processed` directory.
 
