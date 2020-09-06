@@ -6,7 +6,7 @@ If you would like to download a sample of the dataset to see if it matches your 
 - [Small sample set, 200 images each class. Total zipped size: 707 MB](https://link.resilio.com/#f=Traffic%20Lights%20Small&sz=74E7&t=2&s=ZKDEP4CNVMHKYZCXE4ZZKYG4DO2UXG3RSWUPPCVNLB4JH4ZLFHJA&i=CEV5W25MHKRQQVP7OTRGS6RBH7T7NKZ3P&v=2.6&a=2)
 - [Large sample set, 500 images each class. Total zipped size: 1.56 GB](https://link.resilio.com/#f=Traffic%20Lights%20Large&sz=16E8&t=2&s=KX5CB5LILKQ4STGPE2E6MY2RDYXVOCO3S42GIKZ6N5D5XW25UC6A&i=CFGKHUOSIEMJ2QL43W6HGM6BLFENSKQ37&v=2.6&a=2)
 
-Each image is 1164x874.
+Each image is 1164x874
 
 To start training, first unzip one of the datasets into the root directory of `traffic-lights` so that the directory tree looks like: `/traffic-lights/data/GREEN/etc.png`.
 
